@@ -118,7 +118,7 @@ class SpdkDevice {
     virtual uint32_t getSizeInBlk(size_t &size) = 0;
     virtual void setReady() = 0;
     virtual bool isBdevFound() = 0;
-    virtual bool isOffloadEnabled() = 0;
+    virtual bool isIoEnabled() = 0;
     virtual void IOQuiesce() = 0;
     virtual bool isIOQuiescent() = 0;
     virtual void IOAbort() = 0;

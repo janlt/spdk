@@ -30,10 +30,15 @@
 #include "spdk/env.h"
 #include "spdk/queue.h"
 
+#include "Status.h"
+#include "Options.h"
+#include "BlockingPoller.h"
 #include "Poller.h"
 #include "Rqst.h"
-#include "SpdkBdevFactory.h"
-#include "Status.h"
+#include "SpdkDevice.h"
+#include "SpdkConf.h"
+#include "SpdkBdev.h"
+#include "SpdkIoBuf.h"
 #include "SpdkCore.h"
 
 namespace BdevCpp {

@@ -58,7 +58,7 @@ class SpdkRAID0Bdev : public SpdkDevice {
     virtual size_t getAlignedSize(size_t size) { return 0; }
     virtual uint32_t getSizeInBlk(size_t &size) { return 0; }
     virtual void setReady() {}
-    virtual bool isOffloadEnabled() { return true; }
+    virtual bool isIoEnabled() { return true; }
     virtual bool isBdevFound() { return true; }
     virtual void IOQuiesce() {}
     virtual bool isIOQuiescent() { return true; }

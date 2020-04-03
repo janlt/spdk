@@ -192,7 +192,7 @@ inline size_t SpdkBdev::getOptimalSize(size_t size) {
 }
 
 inline size_t SpdkBdev::getAlignedSize(size_t size) {
-    return getOptimalSize(size) + spBdevCtx.blk_size - 1 &
+    return (getOptimalSize(size) + spBdevCtx.blk_size - 1) &
            ~(spBdevCtx.blk_size - 1);
 }
 

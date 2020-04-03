@@ -27,7 +27,7 @@ template <class T> class Poller {
     Poller(bool _createBuf = true,
            spdk_ring_type _rsqRingType = SPDK_RING_TYPE_MP_SC)
         : rqstRing(0), requests(new T *[DEQUEUE_RING_LIMIT]),
-          createBuf(_createBuf), rsqRingType(_rsqRingType) {
+          rsqRingType(_rsqRingType), createBuf(_createBuf) {
         if (createBuf == true) {
             rqstRing =
                 spdk_ring_create(rsqRingType, 4096 * 4, SPDK_ENV_SOCKET_ID_ANY);
@@ -61,7 +61,7 @@ template <class T> class Poller {
     virtual void process() = 0;
 
     virtual void setRunning(int rn) {}
-    virtual bool isOffloadRunning() { return false; }
+    virtual bool isIoRunning() { return false; }
     virtual void initFreeList() {}
     virtual uint32_t canQueue() { return 0; }
 

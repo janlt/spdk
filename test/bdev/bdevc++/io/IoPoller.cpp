@@ -36,8 +36,6 @@
 #include "spdk/env.h"
 
 #include "IoPoller.h"
-#include "Logger.h"
-#include "Status.h"
 
 
 #define LAYOUT "queue"
@@ -59,9 +57,7 @@ void IoPoller::_processGet(IoRqst *rqst) {
         new (rqst->taskBuffer) DeviceTask{0,
                                           spdkDev->getOptimalSize(rqst->dataSize),
                                           0,
-                                          static_cast<DeviceAddr *>(valCtx.val),
-                                          nullptr,
-                                          false,
+                                          0,
                                           rqst->clb,
                                           spdkDev,
                                           rqst,
@@ -82,9 +78,9 @@ void IoPoller::_processUpdate(IoRqst *rqst) {
     }
 
     SpdkDevice *spdkDev = getBdev();
-    auto valSizeAlign = spdkDev->getAlignedSize(rqst->valueSize);
+    auto valSizeAlign = spdkDev->getAlignedSize(rqst->dataSize);
 
-    if (rqst->valueSize == 0) {
+    if (rqst->dataSize == 0) {
         _rqstClb(rqst, StatusCode::OK);
         IoRqst::updatePool.put(rqst);
         return;
@@ -95,7 +91,6 @@ void IoPoller::_processUpdate(IoRqst *rqst) {
                    spdkDev->getOptimalSize(rqst->dataSize),
                    spdkDev->getSizeInBlk(valSizeAlign),
                    new (rqst->devAddrBuf) DeviceAddr,
-                   false,
                    rqst->clb,
                    spdkDev,
                    rqst,
@@ -108,35 +103,12 @@ void IoPoller::_processUpdate(IoRqst *rqst) {
 }
 
 void IoPoller::_processRemove(IoRqst *rqst) {
-
-    ValCtx valCtx;
-
-    auto rc = _getValCtx(rqst, valCtx);
-    if (rc != StatusCode::OK) {
-        _rqstClb(rqst, rc);
-        if (rqst->valueSize > 0)
-            delete[] rqst->value;
-        IoRqst::removePool.put(rqst);
-        return;
-    }
-
-    if (valCtx.location == LOCATIONS::PMEM) {
-        _rqstClb(rqst, StatusCode::KEY_NOT_FOUND);
-        if (rqst->valueSize > 0)
-            delete[] rqst->value;
-        IoRqst::removePool.put(rqst);
-        return;
-    }
-
-    uint64_t lba = *(static_cast<uint64_t *>(valCtx.val));
-
     SpdkDevice *spdkDev = getBdev();
     DeviceTask *ioTask = new (rqst->taskBuffer)
         DeviceTask{0,
-                   spdkDev->getOptimalSize(rqst->valueSize),
+                   spdkDev->getOptimalSize(rqst->dataSize),
                    0,
-                   static_cast<DeviceAddr *>(valCtx.val),
-                   false,
+                   0,
                    rqst->clb,
                    spdkDev,
                    rqst,

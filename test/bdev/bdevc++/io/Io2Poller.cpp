@@ -37,7 +37,7 @@
 namespace BdevCpp {
 
 Io2Poller::Io2Poller()
-    : _state(Io2Poller::State::FP_READY), FinPoller() {}
+    : FinPoller(), _state(Io2Poller::State::FP_READY) {}
 
 void Io2Poller::process() {
     if (requestCount > 0) {
@@ -115,8 +115,6 @@ void Io2Poller::_processUpdate(DeviceTask *task) {
 }
 
 void Io2Poller::_processRemove(DeviceTask *task) {
-    SpdkBdev *bdev = reinterpret_cast<SpdkBdev *>(task->bdev);
-
     if (task->result == true) {
         if (task->clb)
             task->clb(StatusCode::OK, nullptr, 0);

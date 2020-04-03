@@ -344,7 +344,7 @@ bool SpdkBdev::remove(DeviceTask *task) {
 
 bool SpdkBdev::doRemove(DeviceTask *task) {
     if (stateMachine() == true) {
-        OffloadRqst::removePool.put(task->rqst);
+        IoRqst::removePool.put(task->rqst);
         return false;
     }
 
@@ -376,21 +376,6 @@ void SpdkBdev::deinit() {
 }
 
 struct spdk_bdev *SpdkBdev::prevBdev = 0;
-
-int64_t SpdkBdev::getFreeLba(size_t ioSize) {
-    return lbaAllocator->getLba(ioSize);
-}
-
-void SpdkBdev::putFreeLba(const DeviceAddr *devAddr, size_t ioSize) {
-    lbaAllocator->putLba(devAddr->lba, ioSize);
-}
-
-void SpdkBdev::initFreeList() {
-    std::string fileName =
-        std::string(SpdkBdev::lbaMgmtFileprefix) + spBdevCtx.bdev_name + ".pm";
-    lbaAllocator =
-        new OffloadLbaAlloc(true, fileName, spBdevCtx.blk_num, blkNumForLba);
-}
 
 bool SpdkBdev::bdevInit() {
     if (confBdevNum == -1) { // single Bdev
