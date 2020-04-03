@@ -24,18 +24,11 @@ namespace BdevCpp {
 
 enum StatusCode : long {
     OK = 0,
-
     _MAX_ERRNO = std::numeric_limits<int>::max(),
-    KEY_NOT_FOUND,
-    BAD_KEY_FORMAT,
-    PMEM_ALLOCATION_ERROR,
-    DHT_ALLOCATION_ERROR,
     SPDK_ALLOCATION_ERROR,
-    OFFLOAD_DISABLED_ERROR,
+    IO_DISABLED_ERROR,
     QUEUE_FULL_ERROR,
-    DHT_DISABLED_ERROR,
     TIME_OUT,
-    DHT_CONNECT_ERROR,
     NOT_IMPLEMENTED,
     NOT_SUPPORTED,
     UNKNOWN_ERROR,

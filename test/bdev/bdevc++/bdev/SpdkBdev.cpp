@@ -36,9 +36,9 @@
 
 #include "Rqst.h"
 #include "SpdkBdev.h"
-#include <Io2Poller.h>
-#include <SpdkIoEngine.h>
-#include <daqdb/Status.h>
+#include "Io2Poller.h"
+#include "SpdkIoEngine.h"
+#include "Status.h"
 
 namespace BdevCpp {
 

@@ -16,7 +16,7 @@
 
 #include <iostream>
 
-#include <Config.h>
+#include "Config.h"
 #include <libconfig.h++>
 
 using namespace libconfig;
