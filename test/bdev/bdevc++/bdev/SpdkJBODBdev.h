@@ -22,11 +22,6 @@
 
 #include "spdk/bdev.h"
 
-#include "SpdkBdev.h"
-#include "SpdkConf.h"
-#include "SpdkDevice.h"
-#include "Logger.h"
-
 namespace BdevCpp {
 
 struct JBODDevice {

@@ -16,8 +16,23 @@
 
 #include <unistd.h>
 
-#include "spdk/bdev.h"
+#include "spdk/stdinc.h"
+#include "spdk/cpuset.h"
+#include "spdk/queue.h"
+#include "spdk/log.h"
+#include "spdk/thread.h"
+#include "spdk/event.h"
+#include "spdk/ftl.h"
+#include "spdk/conf.h"
+#include "spdk/env.h"
 
+#include "Status.h"
+#include "Options.h"
+#include "Rqst.h"
+#include "Poller.h"
+#include "SpdkDevice.h"
+#include "SpdkConf.h"
+#include "SpdkBdev.h"
 #include "SpdkJBODBdev.h"
 #include "Logger.h"
 
@@ -97,7 +112,7 @@ void SpdkJBODBdev::deinit() {
 }
 
 bool SpdkJBODBdev::init(const SpdkConf &conf) {
-    if (conf.getSpdkConfDevType() != SpdkConfDevType::JBOD) {
+    if (conf.getIoDevType() != IoDevType::JBOD) {
         return false;
     }
 
@@ -108,7 +123,7 @@ bool SpdkJBODBdev::init(const SpdkConf &conf) {
         devices[numDevices].num = numDevices;
         devices[numDevices].bdev = new SpdkBdev(statsEnabled);
 
-        SpdkConf currConf(SpdkConfDevType::BDEV, d.devName, 0);
+        SpdkConf currConf(IoDevType::BDEV, d.devName, 0);
         currConf.setBdevNum(bdevNum++);
         currConf.addDev(d);
         bool ret = devices[numDevices].bdev->init(currConf);

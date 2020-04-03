@@ -32,11 +32,16 @@
 #include "spdk/stdinc.h"
 #include "spdk/thread.h"
 
-#include "BdevStats.h"
+#include "Status.h"
+#include "Options.h"
+#include "Rqst.h"
+#include "Poller.h"
+#include "SpdkDevice.h"
+#include "SpdkConf.h"
 #include "SpdkBdev.h"
+#include "SpdkIoBuf.h"
 #include "SpdkIoEngine.h"
 #include "Io2Poller.h"
-#include "Status.h"
 
 namespace BdevCpp {
 
@@ -49,21 +54,21 @@ void SpdkIoEngine::process() {
             task->routing = false;
             SpdkBdev *bdev = reinterpret_cast<SpdkBdev *>(task->bdev);
             switch (task->op) {
-            case IoOperation::GET: {
+            case IoOp::READ: {
                 bool ret = bdev->read(task);
                 if (ret != true) {
                     rqstClb(task->rqst, StatusCode::UNKNOWN_ERROR);
                     IoRqst::getPool.put(task->rqst);
                 }
             } break;
-            case IoOperation::UPDATE: {
+            case IoOp::UPDATE: {
                 bool ret = bdev->write(task);
                 if (ret != true) {
                     rqstClb(task->rqst, StatusCode::UNKNOWN_ERROR);
                     IoRqst::updatePool.put(task->rqst);
                 }
             } break;
-            case IoOperation::REMOVE: {
+            case IoOp::DELETE: {
                 bool ret = bdev->remove(task);
                 if (ret != true) {
                     rqstClb(task->rqst, StatusCode::UNKNOWN_ERROR);

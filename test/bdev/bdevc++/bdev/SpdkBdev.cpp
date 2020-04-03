@@ -34,11 +34,17 @@
 #include "spdk/conf.h"
 #include "spdk/env.h"
 
-#include "Rqst.h"
-#include "SpdkBdev.h"
+#include "Status.h"
+#include "Options.h"
+#include "BlockingPoller.h"
+#include "Poller.h"
 #include "Io2Poller.h"
 #include "SpdkIoEngine.h"
-#include "Status.h"
+#include "Rqst.h"
+#include "SpdkDevice.h"
+#include "SpdkConf.h"
+#include "SpdkBdev.h"
+#include "SpdkIoBuf.h"
 
 namespace BdevCpp {
 
@@ -58,16 +64,16 @@ size_t SpdkBdev::cpuCoreCounter = SpdkBdev::cpuCoreStart;
 SpdkBdev::SpdkBdev(bool enableStats)
     : state(SpdkBdevState::SPDK_BDEV_INIT), _spdkPoller(0), confBdevNum(-1),
       cpuCore(SpdkBdev::getCoreNum()), cpuCoreFin(cpuCore + 1),
-      cpuCoreIoEng(cpuCoreFin + 1), finalizer(0), finalizerThread(0),
+      cpuCoreIoEng(cpuCoreFin + 1), io2(0), io2Thread(0),
       ioEngine(0), ioEngineThread(0), isRunning(0), statsEnabled(enableStats),
       ioEngineInitDone(0), maxIoBufs(0), ioBufsInUse(0), maxCacheIoBufs(0),
       ioPoolMgr(SpdkIoBufMgr::getSpdkIoBufMgr()) {}
 
 SpdkBdev::~SpdkBdev() {
-    if (finalizerThread != nullptr)
-        finalizerThread->join();
-    if (finalizer)
-        delete finalizer;
+    if (io2Thread != nullptr)
+        io2Thread->join();
+    if (io2)
+        delete io2;
 
     if (ioEngineThread != nullptr)
         ioEngineThread->join();
@@ -81,14 +87,14 @@ size_t SpdkBdev::getCoreNum() {
 }
 
 void SpdkBdev::IOQuiesce() {
-    finalizer->Quiesce();
+    io2->Quiesce();
     _IoState = SpdkBdev::IOState::BDEV_IO_QUIESCING;
 }
 
 bool SpdkBdev::isIOQuiescent() {
     return ((_IoState == SpdkBdev::IOState::BDEV_IO_QUIESCENT ||
              _IoState == SpdkBdev::IOState::BDEV_IO_ABORTED) &&
-            finalizer->isQuiescent() == true)
+            io2->isQuiescent() == true)
                ? true
                : false;
 }
@@ -118,7 +124,7 @@ void SpdkBdev::writeComplete(struct spdk_bdev_io *bdev_io, bool success,
     task->result = success;
     if (bdev->statsEnabled == true && success == true)
         bdev->stats.printWritePer(std::cout, bdev->spBdevCtx.bdev_addr);
-    bdev->finalizer->enqueue(task);
+    bdev->io2->enqueue(task);
 }
 
 /*
@@ -142,7 +148,7 @@ void SpdkBdev::readComplete(struct spdk_bdev_io *bdev_io, bool success,
     task->result = success;
     if (bdev->statsEnabled == true && success == true)
         bdev->stats.printReadPer(std::cout, bdev->spBdevCtx.bdev_addr);
-    bdev->finalizer->enqueue(task);
+    bdev->io2->enqueue(task);
 }
 
 /*
@@ -220,7 +226,7 @@ bool SpdkBdev::doRead(DeviceTask *task) {
         return false;
     }
 
-    size_t algnSize = bdev->getAlignedSize(task->rqst->valueSize);
+    size_t algnSize = bdev->getAlignedSize(task->rqst->dataSize);
     auto blkSize = bdev->getSizeInBlk(algnSize);
     task->blockSize = blkSize;
 
@@ -284,15 +290,13 @@ bool SpdkBdev::doWrite(DeviceTask *task) {
         return false;
     }
 
-    auto valSize = task->rqst->valueSize;
+    auto valSize = task->rqst->dataSize;
     auto valSizeAlign = bdev->getAlignedSize(valSize);
-    if (task->rqst->loc == LOCATIONS::PMEM)
-        task->freeLba = getFreeLba(valSize);
     bdev->ioBufsInUse++;
     task->buff =
         ioPoolMgr->getIoWriteBuf(valSizeAlign, bdev->spBdevCtx.buf_align);
 
-    memcpy(task->buff->getSpdkDmaBuf(), task->rqst->value, valSize);
+    memcpy(task->buff->getSpdkDmaBuf(), task->rqst->data, valSize);
 
 #ifdef TEST_RAW_IOPS
     int w_rc = 0;
@@ -348,12 +352,11 @@ bool SpdkBdev::doRemove(DeviceTask *task) {
         return false;
     }
 
-    auto valSize = task->rqst->valueSize;
+    auto valSize = task->rqst->dataSize;
     auto valSizeAlign = getAlignedSize(valSize);
 
-    putFreeLba(task->bdevAddr, valSizeAlign);
     task->result = true;
-    return finalizer->enqueue(task);
+    return io2->enqueue(task);
 }
 
 int SpdkBdev::reschedule(DeviceTask *task) {
@@ -458,13 +461,13 @@ bool SpdkBdev::init(const SpdkConf &conf) {
     /*
      * Set up finalizer
      */
-    finalizer = new Io2Poller();
-    finalizerThread = new std::thread(&SpdkBdev::finilizerThreadMain, this);
+    io2 = new Io2Poller();
+    io2Thread = new std::thread(&SpdkBdev::finilizerThreadMain, this);
     cpu_set_t cpuset;
     CPU_ZERO(&cpuset);
     CPU_SET(cpuCoreFin, &cpuset);
 
-    int set_result = pthread_setaffinity_np(finalizerThread->native_handle(),
+    int set_result = pthread_setaffinity_np(io2Thread->native_handle(),
                                             sizeof(cpu_set_t), &cpuset);
     if (!set_result) {
         IOP_DEBUG("SpdkCore thread affinity set on CPU core [" +
@@ -506,8 +509,8 @@ void SpdkBdev::finilizerThreadMain() {
     while (isRunning == 3) {
     }
     while (isRunning) {
-        finalizer->dequeue();
-        finalizer->process();
+        io2->dequeue();
+        io2->process();
     }
 }
 

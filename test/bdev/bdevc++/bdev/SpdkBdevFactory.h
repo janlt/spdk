@@ -16,9 +16,12 @@
 
 #pragma once
 
-#include "SpdkBdev.h"
-#include "SpdkConf.h"
+#include "Status.h"
+#include "Options.h"
+#include "Rqst.h"
 #include "SpdkDevice.h"
+#include "SpdkConf.h"
+#include "SpdkBdev.h"
 #include "SpdkJBODBdev.h"
 #include "SpdkRAID0Bdev.h"
 

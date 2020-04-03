@@ -23,6 +23,8 @@ namespace BdevCpp {
 
 enum IoDevType : std::int8_t { BDEV = 0, JBOD = 1, RAID0 = 2 };
 
+typedef IoDevType SpdkDevConfType;
+
 struct IoDevDescriptor {
     IoDevDescriptor() = default;
     ~IoDevDescriptor() = default;

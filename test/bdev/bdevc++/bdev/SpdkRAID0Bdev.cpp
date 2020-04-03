@@ -14,6 +14,23 @@
  * limitations under the License.
  */
 
+#include "spdk/stdinc.h"
+#include "spdk/cpuset.h"
+#include "spdk/queue.h"
+#include "spdk/log.h"
+#include "spdk/thread.h"
+#include "spdk/event.h"
+#include "spdk/ftl.h"
+#include "spdk/conf.h"
+#include "spdk/env.h"
+
+#include "Status.h"
+#include "Options.h"
+#include "Rqst.h"
+#include "Poller.h"
+#include "SpdkDevice.h"
+#include "SpdkConf.h"
+#include "SpdkBdev.h"
 #include "SpdkRAID0Bdev.h"
 #include "Logger.h"
 

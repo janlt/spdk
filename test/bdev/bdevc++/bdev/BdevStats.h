@@ -23,9 +23,6 @@
 
 #include "spdk/bdev.h"
 
-#include "SpdkConf.h"
-#include "SpdkDevice.h"
-
 namespace BdevCpp {
 
 struct BdevStats {

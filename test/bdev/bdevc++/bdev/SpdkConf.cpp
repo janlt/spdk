@@ -18,8 +18,14 @@
 #include <string.h>
 #include <string>
 
+#include <vector>
+
+#include "Status.h"
 #include "Options.h"
+#include "Rqst.h"
+#include "SpdkDevice.h"
 #include "SpdkConf.h"
+#include "SpdkBdev.h"
 
 namespace BdevCpp {
 
@@ -30,7 +36,7 @@ SpdkConf::SpdkConf(const IoOptions &_ioOptions)
     copyDevs(_ioOptions._devs);
 }
 
-SpdkConf::SpdkConf(SpdkConfDevType devType, std::string name,
+SpdkConf::SpdkConf(IoDevType devType, std::string name,
                    size_t raid0StripeSize)
     : _devType(devType), _name(name), _raid0StripeSize(raid0StripeSize) {}
 

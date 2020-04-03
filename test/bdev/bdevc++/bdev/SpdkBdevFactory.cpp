@@ -16,14 +16,7 @@
 
 #include <string>
 
-#include <Rqst.h>
-
-#include "SpdkBdev.h"
 #include "SpdkBdevFactory.h"
-#include "SpdkConf.h"
-#include "SpdkDevice.h"
-#include "SpdkJBODBdev.h"
-#include "SpdkRAID0Bdev.h"
 
 namespace BdevCpp {
 

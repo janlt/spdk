@@ -169,8 +169,8 @@ class SpdkBdev : public SpdkDevice {
     void ioEngineThreadMain(void);
     static int ioEngineIoFunction(void *arg);
 
-    Io2Poller *finalizer;
-    std::thread *finalizerThread;
+    Io2Poller *io2;
+    std::thread *io2Thread;
     void finilizerThreadMain(void);
 
     std::atomic<int> ioEngineInitDone;
