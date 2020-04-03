@@ -25,7 +25,7 @@ namespace BdevCpp {
 
 bool readConfig(const std::string &configFile, BdevCpp::Options &options) {
     std::stringstream ss;
-    return readConfiguration(configFile, options, ss);
+    return readConfig(configFile, options, ss);
 }
 
 bool readConfig(const std::string &configFile, BdevCpp::Options &options,

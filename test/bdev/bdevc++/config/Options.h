@@ -48,4 +48,5 @@ struct Options {
 
     IoOptions io;
 };
+
 } // namespace BdevCpp

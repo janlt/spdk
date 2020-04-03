@@ -32,12 +32,12 @@ class GeneralPoolBase {
     virtual void dump() = 0;
     virtual void stats(FILE &file_) = 0;
     void setRttiName(const char *_rttiName);
-    const unsigned short getId() const;
+    unsigned short getId() const;
     const char *getName() const;
     const char *getRttiName() const;
     const FILE *getStackTraceFile() const;
     void setStackTraceFile(FILE *value);
-    const unsigned short getUserId() const;
+    unsigned short getUserId() const;
 
     unsigned short id;
     char name[32];
@@ -53,7 +53,7 @@ class GeneralPoolBase {
     Lock generMutex;
 };
 
-inline const unsigned short GeneralPoolBase::getId() const { return id; }
+inline unsigned short GeneralPoolBase::getId() const { return id; }
 
 inline const char *GeneralPoolBase::getName() const { return name; }
 
@@ -67,7 +67,7 @@ inline void GeneralPoolBase::setStackTraceFile(FILE *value) {
     stackTraceFile = value;
 }
 
-inline const unsigned short GeneralPoolBase::getUserId() const {
+inline unsigned short GeneralPoolBase::getUserId() const {
     return userId;
 }
 } // namespace BdevCpp

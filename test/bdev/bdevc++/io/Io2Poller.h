@@ -26,15 +26,16 @@
 
 #include "spdk/bdev.h"
 #include "spdk/env.h"
-#include "spdk/io_channel.h"
 #include "spdk/queue.h"
 
+#include "Status.h"
+#include "Options.h"
 #include "BlockingPoller.h"
 #include "Poller.h"
 #include "Rqst.h"
 #include "SpdkDevice.h"
-#include "SpdkBdev.h"
 #include "SpdkConf.h"
+#include "SpdkBdev.h"
 #include "SpdkIoBuf.h"
 
 namespace BdevCpp {

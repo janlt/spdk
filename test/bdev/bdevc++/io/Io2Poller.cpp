@@ -85,8 +85,8 @@ void Io2Poller::_processGet(DeviceTask *task) {
 
     if (task->result) {
         if (task->clb)
-            task->clb(nullptr, StatusCode::OK, task->key, task->keySize,
-                      task->buff->getSpdkDmaBuf(), task->rqst->valueSize);
+            task->clb(StatusCode::OK,
+                      task->buff->getSpdkDmaBuf(), task->rqst->dataSize);
     } else {
         if (task->clb)
             task->clb(StatusCode::UNKNOWN_ERROR, nullptr, 0);

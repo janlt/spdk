@@ -16,7 +16,6 @@
 
 #pragma once
 
-#include "spdk/io_channel.h"
 #include "spdk/queue.h"
 
 #define DEQUEUE_RING_LIMIT 1024

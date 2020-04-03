@@ -24,11 +24,10 @@
 #include "spdk/bdev.h"
 
 #include "BdevStats.h"
-#include "Rqst.h"
 #include "SpdkConf.h"
 #include "SpdkDevice.h"
 #include "SpdkIoBuf.h"
-#include <Logger.h>
+#include "Logger.h"
 
 namespace BdevCpp {
 
@@ -68,7 +67,7 @@ class SpdkBdev : public SpdkDevice {
     virtual size_t getAlignedSize(size_t size);
     virtual uint32_t getSizeInBlk(size_t &size);
     virtual void setReady();
-    virtual bool isOffloadEnabled();
+    virtual bool isIoEnabled();
     virtual bool isBdevFound();
     virtual SpdkBdevCtx *getBdevCtx();
 
@@ -174,8 +173,6 @@ class SpdkBdev : public SpdkDevice {
     std::thread *finalizerThread;
     void finilizerThreadMain(void);
 
-    OffloadLbaAlloc *lbaAllocator = nullptr;
-
     std::atomic<int> ioEngineInitDone;
     uint32_t maxIoBufs;
     uint32_t maxCacheIoBufs;
@@ -205,7 +202,7 @@ inline uint32_t SpdkBdev::getSizeInBlk(size_t &size) {
 
 inline void SpdkBdev::setReady() { spBdevCtx.state = SPDK_BDEV_READY; }
 
-inline bool SpdkBdev::isOffloadEnabled() {
+inline bool SpdkBdev::isIoEnabled() {
     return spBdevCtx.state == SPDK_BDEV_READY;
 }
 

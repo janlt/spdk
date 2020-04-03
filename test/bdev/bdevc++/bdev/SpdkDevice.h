@@ -19,9 +19,6 @@
 #include "spdk/bdev.h"
 #include "spdk/env.h"
 
-#include "Logger.h"
-#include "Options.h"
-
 namespace BdevCpp {
 
 struct PciAddr {
@@ -51,6 +48,7 @@ typedef IoDevType SpdkDeviceClass;
 
 class SpdkDevice;
 class SpdkIoBuf;
+class SpdkConf;
 
 struct DeviceTask {
     SpdkIoBuf *buff;

@@ -22,7 +22,6 @@
 
 #include "spdk/bdev.h"
 
-#include "Rqst.h"
 #include "SpdkBdev.h"
 #include "SpdkConf.h"
 #include "SpdkDevice.h"

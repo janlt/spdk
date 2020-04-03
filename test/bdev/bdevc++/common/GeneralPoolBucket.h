@@ -65,22 +65,22 @@ template <class T, class Alloc> class GeneralPoolBucket {
     void setName(const char *_name);
     void setRttiName(const char *_rttiName);
 
-    const unsigned int getQuantInc() const;
+    unsigned int getQuantInc() const;
     void setQuantInc(unsigned int value);
 
-    const unsigned int getQuantDec() const;
+    unsigned int getQuantDec() const;
     void setQuantDec(unsigned int value);
 
-    const unsigned int getNumBuffers() const;
+    unsigned int getNumBuffers() const;
     void setNumBuffers(unsigned int value);
 
-    const unsigned int getBucketNum() const;
+    unsigned int getBucketNum() const;
     void setBucketNum(unsigned int value);
 
-    const unsigned int getTotalMax() const;
+    unsigned int getTotalMax() const;
     void setTotalMax(unsigned int value);
 
-    const unsigned int getCurrentMax() const;
+    unsigned int getCurrentMax() const;
     void setCurrentMax(unsigned int value);
 
     void setStackTraceFile(FILE *value);
@@ -865,7 +865,7 @@ inline void GeneralPoolBucket<T, Alloc>::setRttiName(const char *_rttiName) {
 }
 
 template <class T, class Alloc>
-inline const unsigned int GeneralPoolBucket<T, Alloc>::getQuantInc() const {
+inline unsigned int GeneralPoolBucket<T, Alloc>::getQuantInc() const {
     return quantInc;
 }
 
@@ -875,7 +875,7 @@ inline void GeneralPoolBucket<T, Alloc>::setQuantInc(unsigned int value) {
 }
 
 template <class T, class Alloc>
-inline const unsigned int GeneralPoolBucket<T, Alloc>::getQuantDec() const {
+inline unsigned int GeneralPoolBucket<T, Alloc>::getQuantDec() const {
     return quantDec;
 }
 
@@ -885,7 +885,7 @@ inline void GeneralPoolBucket<T, Alloc>::setQuantDec(unsigned int value) {
 }
 
 template <class T, class Alloc>
-inline const unsigned int GeneralPoolBucket<T, Alloc>::getNumBuffers() const {
+inline unsigned int GeneralPoolBucket<T, Alloc>::getNumBuffers() const {
     return numBuffers;
 }
 
@@ -895,7 +895,7 @@ inline void GeneralPoolBucket<T, Alloc>::setNumBuffers(unsigned int value) {
 }
 
 template <class T, class Alloc>
-inline const unsigned int GeneralPoolBucket<T, Alloc>::getBucketNum() const {
+inline unsigned int GeneralPoolBucket<T, Alloc>::getBucketNum() const {
     return bucketNum;
 }
 
@@ -905,7 +905,7 @@ inline void GeneralPoolBucket<T, Alloc>::setBucketNum(unsigned int value) {
 }
 
 template <class T, class Alloc>
-inline const unsigned int GeneralPoolBucket<T, Alloc>::getTotalMax() const {
+inline unsigned int GeneralPoolBucket<T, Alloc>::getTotalMax() const {
     return totalMax;
 }
 
@@ -915,7 +915,7 @@ inline void GeneralPoolBucket<T, Alloc>::setTotalMax(unsigned int value) {
 }
 
 template <class T, class Alloc>
-inline const unsigned int GeneralPoolBucket<T, Alloc>::getCurrentMax() const {
+inline unsigned int GeneralPoolBucket<T, Alloc>::getCurrentMax() const {
     return currentMax;
 }
 

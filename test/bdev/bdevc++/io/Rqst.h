@@ -46,7 +46,7 @@ class Rqst {
         : op(op), data(data),
           dataSize(dataSize), clb(clb) {}
     Rqst()
-        : op(T::GET), data(0), dataSize(0),
+        : op(T::READ), data(0), dataSize(0),
           clb(0) {};
     virtual ~Rqst() = default;
     void finalizeUpdate(const char *_data, size_t _dataSize, RqstCallback _clb) {
@@ -56,13 +56,13 @@ class Rqst {
         clb = _clb;
     }
     void finalizeGet(const char *_data, size_t _dataSize, RqstCallback _clb) {
-        op = T::GET;
+        op = T::READ;
         data = _data;
         dataSize = _dataSize;
         clb = _clb;
     }
     void finalizeRemove(const char *_data, size_t _dataSize, RqstCallback _clb) {
-        op = T::REMOVE;
+        op = T::DELETE;
         data = _data;
         dataSize = _dataSize;
         clb = _clb;
@@ -72,9 +72,7 @@ class Rqst {
     const char *data = nullptr;
     size_t dataSize = 0;
 
-    // @TODO jradtke need to check if passing function object has impact on
-    // performance
-    KVStoreBase::KVStoreBaseCallback clb;
+    RqstCallback clb;
     unsigned char taskBuffer[256];
     uint64_t devAddrBuf[2];
 
