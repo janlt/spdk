@@ -6,6 +6,9 @@ include $(SPDK_ROOT_DIR)/mk/spdk.app_cxx.mk
 #CXXFLAGS += -g $(ENV_CXXFLAGS)
 CXXFLAGS += $(ENV_CXXFLAGS)
 CXXFLAGS += -I$(SPDK_ROOT_DIR)/lib
+CXXFLAGS += -I$(SPDK_ROOT_DIR)/test/bdev/bdevc++ 
+CFLAGS += -I$(SPDK_ROOT_DIR)/test/bdev/bdevc++
+
 CXX_SRCS := main.cpp
 
 APP = bdevcpp
@@ -20,6 +23,7 @@ SPDK_LIB_LIST += event_nbd nbd
 endif
 
 #LDFLAGS += -lboost_thread -lpthread -lrt -lnuma -ldl -luuid -lstdc++ -g
-LDFLAGS += -lboost_thread -lpthread -lrt -lnuma -ldl -luuid -lstdc++ 
+LDFLAGS += -lspdk_bdevc++common -lspdk_bdevc++io -lspdk_bdevc++bdev -lspdk_bdevc++config
+LDFLAGS += -lboost_thread -lpthread -lrt -lnuma -ldl -luuid -lstdc++ -lboost_filesystem
 
 include $(SPDK_ROOT_DIR)/mk/spdk.app.mk
