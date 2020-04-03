@@ -35,7 +35,7 @@
 #include "BdevStats.h"
 #include "SpdkBdev.h"
 #include "SpdkIoEngine.h"
-#include <FinalizePoller.h>
+#include <Io2Poller.h>
 #include <Status.h>
 
 namespace BdevCpp {

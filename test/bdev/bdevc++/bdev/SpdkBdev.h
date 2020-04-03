@@ -24,14 +24,11 @@
 #include "spdk/bdev.h"
 
 #include "BdevStats.h"
-#include "OffloadFreeList.h"
-#include "OffloadLbaAlloc.h"
 #include "Rqst.h"
 #include "SpdkConf.h"
 #include "SpdkDevice.h"
 #include "SpdkIoBuf.h"
 #include <Logger.h>
-#include <RTreeEngine.h>
 
 namespace BdevCpp {
 
@@ -42,7 +39,7 @@ enum class SpdkBdevState : std::uint8_t {
     SPDK_BDEV_ERROR
 };
 
-class FinalizePoller;
+class Io2Poller;
 class SpdkIoEngine;
 
 class SpdkBdev : public SpdkDevice {
@@ -173,7 +170,7 @@ class SpdkBdev : public SpdkDevice {
     void ioEngineThreadMain(void);
     static int ioEngineIoFunction(void *arg);
 
-    FinalizePoller *finalizer;
+    Io2Poller *finalizer;
     std::thread *finalizerThread;
     void finilizerThreadMain(void);
 

@@ -36,7 +36,7 @@
 
 #include "Rqst.h"
 #include "SpdkBdev.h"
-#include <FinalizePoller.h>
+#include <Io2Poller.h>
 #include <SpdkIoEngine.h>
 #include <daqdb/Status.h>
 
@@ -473,7 +473,7 @@ bool SpdkBdev::init(const SpdkConf &conf) {
     /*
      * Set up finalizer
      */
-    finalizer = new FinalizePoller();
+    finalizer = new Io2Poller();
     finalizerThread = new std::thread(&SpdkBdev::finilizerThreadMain, this);
     cpu_set_t cpuset;
     CPU_ZERO(&cpuset);
@@ -486,7 +486,7 @@ bool SpdkBdev::init(const SpdkConf &conf) {
                   std::to_string(cpuCoreFin) + "]");
     } else {
         IOP_DEBUG("Cannot set affinity on CPU core [" +
-                  std::to_string(cpuCoreFin) + "] for Finalizer");
+                  std::to_string(cpuCoreFin) + "] for Io2r");
     }
 
     /*
