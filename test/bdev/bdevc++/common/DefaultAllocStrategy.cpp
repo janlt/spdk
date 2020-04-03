@@ -18,7 +18,8 @@
 
 namespace BdevCpp {
 
-DefaultAllocStrategy::DefaultAllocStrategy(const DefaultAllocStrategy &right) {}
+DefaultAllocStrategy::DefaultAllocStrategy(const DefaultAllocStrategy &right)
+    : AllocStrategy() {}
 
 AllocStrategy *DefaultAllocStrategy::copy() const {
     return new DefaultAllocStrategy(*this);

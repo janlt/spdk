@@ -72,7 +72,7 @@ class SpdkJBODBdev : public SpdkDevice {
         return size ? (((size - 1) / 4096 + 1) * spBdevCtx.io_min_size) : 0;
     }
     virtual size_t getAlignedSize(size_t size) {
-        return getOptimalSize(size) + spBdevCtx.blk_size - 1 &
+        return (getOptimalSize(size) + spBdevCtx.blk_size - 1) &
                ~(spBdevCtx.blk_size - 1);
     }
     virtual uint32_t getSizeInBlk(size_t &size) {

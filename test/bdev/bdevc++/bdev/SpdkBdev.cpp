@@ -64,10 +64,9 @@ size_t SpdkBdev::cpuCoreCounter = SpdkBdev::cpuCoreStart;
 SpdkBdev::SpdkBdev(bool enableStats)
     : state(SpdkBdevState::SPDK_BDEV_INIT), _spdkPoller(0), confBdevNum(-1),
       cpuCore(SpdkBdev::getCoreNum()), cpuCoreFin(cpuCore + 1),
-      cpuCoreIoEng(cpuCoreFin + 1), io2(0), io2Thread(0),
-      ioEngine(0), ioEngineThread(0), isRunning(0), statsEnabled(enableStats),
-      ioEngineInitDone(0), maxIoBufs(0), ioBufsInUse(0), maxCacheIoBufs(0),
-      ioPoolMgr(SpdkIoBufMgr::getSpdkIoBufMgr()) {}
+      cpuCoreIoEng(cpuCoreFin + 1), ioEngine(0), ioEngineThread(0),
+      io2(0), io2Thread(0), ioEngineInitDone(0), maxIoBufs(0), maxCacheIoBufs(0), ioBufsInUse(0),
+      ioPoolMgr(SpdkIoBufMgr::getSpdkIoBufMgr()), isRunning(0), statsEnabled(enableStats) {}
 
 SpdkBdev::~SpdkBdev() {
     if (io2Thread != nullptr)
@@ -351,9 +350,6 @@ bool SpdkBdev::doRemove(DeviceTask *task) {
         IoRqst::removePool.put(task->rqst);
         return false;
     }
-
-    auto valSize = task->rqst->dataSize;
-    auto valSizeAlign = getAlignedSize(valSize);
 
     task->result = true;
     return io2->enqueue(task);
