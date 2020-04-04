@@ -41,6 +41,6 @@ class Logger {
     std::function<void(std::string)> _logFunc = nullptr;
 };
 
-extern BdevCpp::Logger gLog;
-
 } // namespace BdevCpp
+
+extern BdevCpp::Logger gLog;

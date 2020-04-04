@@ -9,6 +9,14 @@ CXXFLAGS += $(ENV_CXXFLAGS)
 CXXFLAGS += -I$(SPDK_ROOT_DIR)/lib
 CXXFLAGS += -I$(SPDK_ROOT_DIR)/test/bdev/bdevc++ 
 CFLAGS += -I$(SPDK_ROOT_DIR)/test/bdev/bdevc++
+CXXFLAGS += -I$(SPDK_ROOT_DIR)/test/bdev/bdevc++/common
+CXXFLAGS += -I$(SPDK_ROOT_DIR)/test/bdev/bdevc++/config
+CXXFLAGS += -I$(SPDK_ROOT_DIR)/test/bdev/bdevc++/io 
+CXXFLAGS += -I$(SPDK_ROOT_DIR)/test/bdev/bdevc++/bdev 
+CFLAGS += -I$(SPDK_ROOT_DIR)/test/bdev/bdevc++/common
+CFLAGS += -I$(SPDK_ROOT_DIR)/test/bdev/bdevc++/config
+CFLAGS += -I$(SPDK_ROOT_DIR)/test/bdev/bdevc++/io
+CFLAGS += -I$(SPDK_ROOT_DIR)/test/bdev/bdevc++/bdev
 
 APP_DIRS = common config io bdev
 

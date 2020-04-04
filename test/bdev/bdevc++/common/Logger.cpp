@@ -16,9 +16,9 @@
 
 #include "Logger.h"
 
-namespace BdevCpp {
-
 BdevCpp::Logger gLog;
+
+namespace BdevCpp {
 
 Logger::Logger() {}
 

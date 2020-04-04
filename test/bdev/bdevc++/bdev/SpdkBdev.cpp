@@ -36,6 +36,7 @@
 
 #include "Status.h"
 #include "Options.h"
+#include "Logger.h"
 #include "BlockingPoller.h"
 #include "Poller.h"
 #include "Io2Poller.h"
