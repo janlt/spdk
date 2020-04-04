@@ -202,8 +202,6 @@ void SpdkCore::spdkStart(void *arg) {
     auto aligned = bdev->getAlignedSize(spdkCore->ioOptions.allocUnitSize);
     bdev->setBlockNumForLba(aligned / bdev_c->blk_size);
 
-    spdkCore->poller->initFreeList();
-    bdev->initFreeList();
     bool i_rc = spdkCore->poller->init();
     if (i_rc == false) {
         IOP_CRITICAL("Poller init failed");
