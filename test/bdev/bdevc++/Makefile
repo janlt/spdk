@@ -9,6 +9,10 @@ CXXFLAGS += -I$(SPDK_ROOT_DIR)/lib
 CXXFLAGS += -I$(SPDK_ROOT_DIR)/test/bdev/bdevc++ 
 CFLAGS += -I$(SPDK_ROOT_DIR)/test/bdev/bdevc++
 
+DIRS-y += common config io bdev
+all: $(DIRS-y)
+clean: $(DIRS-y)
+
 CXX_SRCS := main.cpp
 
 APP = bdevcpp
@@ -23,7 +27,7 @@ SPDK_LIB_LIST += event_nbd nbd
 endif
 
 #LDFLAGS += -lboost_thread -lpthread -lrt -lnuma -ldl -luuid -lstdc++ -g
-LDFLAGS += -lspdk_bdevc++common -lspdk_bdevc++io -lspdk_bdevc++bdev -lspdk_bdevc++config
-LDFLAGS += -lboost_thread -lpthread -lrt -lnuma -ldl -luuid -lstdc++ -lboost_filesystem
+SPDK_LIB_LIST += bdevc++common bdevc++io bdevc++bdev bdevc++config
+LDFLAGS += -lboost_thread -lpthread -lrt -lnuma -ldl -luuid -lstdc++ -lboost_filesystem -lconfig++
 
 include $(SPDK_ROOT_DIR)/mk/spdk.app.mk

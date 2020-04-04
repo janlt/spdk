@@ -110,9 +110,6 @@ class SpdkDevice {
 
     virtual bool init(const SpdkConf &_conf) = 0;
     virtual void deinit() = 0;
-    virtual void initFreeList() = 0;
-    virtual int64_t getFreeLba(size_t ioSize) = 0;
-    virtual void putFreeLba(const DeviceAddr *devAddr, size_t ioSize) = 0;
     virtual size_t getOptimalSize(size_t size) = 0;
     virtual size_t getAlignedSize(size_t size) = 0;
     virtual uint32_t getSizeInBlk(size_t &size) = 0;

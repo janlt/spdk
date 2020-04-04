@@ -144,12 +144,6 @@ bool SpdkJBODBdev::init(const SpdkConf &conf) {
     return true;
 }
 
-void SpdkJBODBdev::initFreeList() {
-    for (uint32_t i = 0; i < numDevices; i++) {
-        devices[i].bdev->initFreeList();
-    }
-}
-
 void SpdkJBODBdev::enableStats(bool en) { statsEnabled = en; }
 
 void SpdkJBODBdev::setMaxQueued(uint32_t io_cache_size, uint32_t blk_size) {}
@@ -159,20 +153,6 @@ void SpdkJBODBdev::setBlockNumForLba(uint64_t blk_num_flba) {
 
     for (uint32_t i = 0; i < numDevices; i++) {
         devices[i].bdev->setBlockNumForLba(blk_num_flba);
-    }
-}
-
-int64_t SpdkJBODBdev::getFreeLba(size_t ioSize) { return -1; }
-
-void SpdkJBODBdev::putFreeLba(const DeviceAddr *devAddr, size_t ioSize) {
-    if (!isRunning)
-        return;
-
-    for (uint32_t i = 0; i < numDevices; i++) {
-        if (devAddr->busAddr.pciAddr == devices[i].addr.busAddr.pciAddr) {
-            devices[i].bdev->putFreeLba(devAddr, ioSize);
-            return;
-        }
     }
 }
 
