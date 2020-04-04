@@ -57,20 +57,72 @@
 #include "SpdkCore.h"
 
 #include "ApiBase.h"
+#include "SyncApi.h"
 #include "AsyncApi.h"
+#include "Api.h"
+
+using namespace std;
 
 namespace BdevCpp {
 
-AsyncApi::AsyncApi(IoPoller *_spio)
-    : spio(_spio) {}
-AsyncApi::~AsyncApi() {}
+SyncApi *Api::syncApi = 0;
+AsyncApi *Api::asyncApi = 0;
 
-int AsyncApi::read(char *buffer, size_t bufferSize) {
-    return 0;
+Api::Api(const Options &options)
+    : spio(0) {
+    SpdkCore *spc = new SpdkCore(options.io);
+    if ( spc->isBdevFound() == true ) {
+        cout << "Io functionality is enabled" << endl;
+    } else {
+        cerr << "Io functionality is disabled" << endl;
+        return;
+    }
+
+    if (spc->isBdevFound() == false) {
+        cerr << "Bdev not found" << endl;
+        return;
+    }
+
+    spio = new IoPoller(spc);
+
+    spc->setPoller(spio);
+    if (spc->isSpdkReady() == true) {
+        spc->startSpdk();
+        spc->waitReady(); // synchronize until SpdkCore is done initializing SPDK framework
+    }
+
+    unique_lock<Lock> r_lock(instanceMutex);
+
+    if (!Api::syncApi) {
+        try {
+            Api::syncApi = new SyncApi(spio);
+        } catch (...) {
+            cerr << "Instantiating SyncApi failed" << endl;
+            Api::syncApi = 0;
+        }
+    }
+
+    if (!Api::asyncApi) {
+        try {
+            Api::asyncApi = new AsyncApi(spio);
+        } catch (...) {
+            cerr << "Instantiating AsyncApi failed" << endl;
+            Api::asyncApi = 0;
+        }
+    }
 }
 
-int AsyncApi::write(const char *data, size_t dataSize) {
-    return 0;
+Api::~Api() {
+    unique_lock<Lock> r_lock(instanceMutex);
+
+    if (Api::syncApi) {
+        delete Api::syncApi;
+        Api::syncApi = 0;
+    }
+    if (Api::asyncApi) {
+        delete Api::asyncApi;
+        Api::asyncApi = 0;
+    }
 }
 
 } // namespace BdevCpp

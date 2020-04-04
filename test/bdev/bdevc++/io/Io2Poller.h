@@ -57,9 +57,8 @@ class Io2Poller : public FinPoller {
     }
 
   protected:
-    void _processGet(DeviceTask *task);
-    void _processUpdate(DeviceTask *task);
-    void _processRemove(DeviceTask *task);
+    void _processRead(DeviceTask *task);
+    void _processWrite(DeviceTask *task);
 
   private:
     std::atomic<State> _state;

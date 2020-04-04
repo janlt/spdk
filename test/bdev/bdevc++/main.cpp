@@ -31,6 +31,7 @@
 #include "ApiBase.h"
 #include "api/SyncApi.h"
 #include "api/AsyncApi.h"
+#include "Api.h"
 
 using namespace std;
 namespace po = boost::program_options;
@@ -57,8 +58,9 @@ int main(int argc, char **argv) {
         return -1;
     }
 
-    BdevCpp::SyncApi *sapi = new BdevCpp::SyncApi(options);
-    delete sapi;
+    BdevCpp::Api api(options);
+    BdevCpp::SyncApi *syncApi = api.getSyncApi();
+    BdevCpp::AsyncApi *asyncApi = api.getAsyncApi();
 
     return 0;
 }

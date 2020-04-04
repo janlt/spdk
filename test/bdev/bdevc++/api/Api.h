@@ -18,14 +18,24 @@
 
 namespace BdevCpp {
 
-class ApiBase {
+class Api {
   public:
-    ApiBase() = default;
-    virtual ~ApiBase() = default;
+    Api(const Options &options);
+    virtual ~Api();
 
-  public:
-    virtual int read(char *buffer, size_t bufferSize) = 0;
-    virtual int write(const char *data, size_t dataSize) = 0;
+    SyncApi *getSyncApi() {
+        return Api::syncApi;
+    }
+    AsyncApi *getAsyncApi() {
+        return Api::asyncApi;
+    }
+
+  private:
+    static SyncApi *syncApi;
+    static AsyncApi *asyncApi;
+
+    IoPoller *spio;
+    std::mutex instanceMutex;
 };
 
 } // namespace BdevCpp

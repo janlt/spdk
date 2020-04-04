@@ -58,21 +58,14 @@ void SpdkIoEngine::process() {
                 bool ret = bdev->read(task);
                 if (ret != true) {
                     rqstClb(task->rqst, StatusCode::UNKNOWN_ERROR);
-                    IoRqst::getPool.put(task->rqst);
+                    IoRqst::readPool.put(task->rqst);
                 }
             } break;
-            case IoOp::UPDATE: {
+            case IoOp::WRITE: {
                 bool ret = bdev->write(task);
                 if (ret != true) {
                     rqstClb(task->rqst, StatusCode::UNKNOWN_ERROR);
-                    IoRqst::updatePool.put(task->rqst);
-                }
-            } break;
-            case IoOp::DELETE: {
-                bool ret = bdev->remove(task);
-                if (ret != true) {
-                    rqstClb(task->rqst, StatusCode::UNKNOWN_ERROR);
-                    IoRqst::removePool.put(task->rqst);
+                    IoRqst::writePool.put(task->rqst);
                 }
             } break;
             default:

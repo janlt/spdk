@@ -73,10 +73,8 @@ class SpdkBdev : public SpdkDevice {
      */
     virtual bool read(DeviceTask *task);
     virtual bool write(DeviceTask *task);
-    virtual bool remove(DeviceTask *task);
     virtual bool doRead(DeviceTask *task);
     virtual bool doWrite(DeviceTask *task);
-    virtual bool doRemove(DeviceTask *task);
     virtual int reschedule(DeviceTask *task);
 
     virtual void enableStats(bool en);

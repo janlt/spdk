@@ -340,22 +340,6 @@ bool SpdkBdev::doWrite(DeviceTask *task) {
     return !w_rc ? true : false;
 }
 
-bool SpdkBdev::remove(DeviceTask *task) {
-    if (ioEngine && task->routing == true)
-        return ioEngine->enqueue(task);
-    return doRemove(task);
-}
-
-bool SpdkBdev::doRemove(DeviceTask *task) {
-    if (stateMachine() == true) {
-        IoRqst::removePool.put(task->rqst);
-        return false;
-    }
-
-    task->result = true;
-    return io2->enqueue(task);
-}
-
 int SpdkBdev::reschedule(DeviceTask *task) {
     SpdkBdev *bdev = reinterpret_cast<SpdkBdev *>(task->bdev);
 

@@ -50,7 +50,7 @@ IoPoller::~IoPoller() {
     isRunning = 0;
 }
 
-void IoPoller::_processGet(IoRqst *rqst) {
+void IoPoller::_processRead(IoRqst *rqst) {
     SpdkDevice *spdkDev = getBdev();
 
     DeviceTask *ioTask =
@@ -65,11 +65,11 @@ void IoPoller::_processGet(IoRqst *rqst) {
 
     if (spdkDev->read(ioTask) != true) {
         _rqstClb(rqst, StatusCode::UNKNOWN_ERROR);
-        IoRqst::getPool.put(rqst);
+        IoRqst::readPool.put(rqst);
     }
 }
 
-void IoPoller::_processUpdate(IoRqst *rqst) {
+void IoPoller::_processWrite(IoRqst *rqst) {
     DeviceTask *ioTask = nullptr;
 
     if (rqst == nullptr) {
@@ -82,7 +82,7 @@ void IoPoller::_processUpdate(IoRqst *rqst) {
 
     if (rqst->dataSize == 0) {
         _rqstClb(rqst, StatusCode::OK);
-        IoRqst::updatePool.put(rqst);
+        IoRqst::writePool.put(rqst);
         return;
     }
 
@@ -94,29 +94,11 @@ void IoPoller::_processUpdate(IoRqst *rqst) {
                    rqst->clb,
                    spdkDev,
                    rqst,
-                   IoOp::UPDATE};
+                   IoOp::WRITE};
 
     if (spdkDev->write(ioTask) != true) {
         _rqstClb(rqst, StatusCode::UNKNOWN_ERROR);
-        IoRqst::updatePool.put(rqst);
-    }
-}
-
-void IoPoller::_processRemove(IoRqst *rqst) {
-    SpdkDevice *spdkDev = getBdev();
-    DeviceTask *ioTask = new (rqst->taskBuffer)
-        DeviceTask{0,
-                   spdkDev->getOptimalSize(rqst->dataSize),
-                   0,
-                   0,
-                   rqst->clb,
-                   spdkDev,
-                   rqst,
-                   IoOp::DELETE};
-
-    if (spdkDev->remove(ioTask) != true) {
-        _rqstClb(rqst, StatusCode::UNKNOWN_ERROR);
-        IoRqst::removePool.put(rqst);
+        IoRqst::writePool.put(rqst);
     }
 }
 
@@ -126,14 +108,10 @@ void IoPoller::process() {
             IoRqst *rqst = requests[RqstIdx];
             switch (rqst->op) {
             case IoOp::READ:
-                _processGet(rqst);
+                _processRead(rqst);
                 break;
-            case IoOp::UPDATE: {
-                _processUpdate(rqst);
-                break;
-            }
-            case IoOp::DELETE: {
-                _processRemove(rqst);
+            case IoOp::WRITE: {
+                _processWrite(rqst);
                 break;
             }
             default:

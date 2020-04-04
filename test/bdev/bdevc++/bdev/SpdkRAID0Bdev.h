@@ -47,7 +47,6 @@ class SpdkRAID0Bdev : public SpdkDevice {
      */
     virtual bool read(DeviceTask *task);
     virtual bool write(DeviceTask *task);
-    virtual bool remove(DeviceTask *task);
     virtual int reschedule(DeviceTask *task);
 
     virtual void enableStats(bool en);

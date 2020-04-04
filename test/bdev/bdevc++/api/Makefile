@@ -13,7 +13,7 @@ SO_VER := 1
 SO_MINOR := 0
 SO_SUFFIX := $(SO_VER).$(SO_MINOR)
 
-CXX_SRCS = SyncApi.cpp AsyncApi.cpp
+CXX_SRCS = SyncApi.cpp AsyncApi.cpp Api.cpp
 LIBNAME = bdevc++api
 
 include $(SPDK_ROOT_DIR)/mk/spdk.lib.mk

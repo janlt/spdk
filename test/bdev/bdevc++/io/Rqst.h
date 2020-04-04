@@ -46,23 +46,17 @@ class Rqst {
         : op(op), data(data),
           dataSize(dataSize), clb(clb) {}
     Rqst()
-        : op(T::READ), data(0), dataSize(0),
+        : op(T::NONE), data(0), dataSize(0),
           clb(0) {};
     virtual ~Rqst() = default;
-    void finalizeUpdate(const char *_data, size_t _dataSize, RqstCallback _clb) {
-        op = T::UPDATE;
+    void finalizeWrite(const char *_data, size_t _dataSize, RqstCallback _clb) {
+        op = T::WRITE;
         data = _data;
         dataSize = _dataSize;
         clb = _clb;
     }
-    void finalizeGet(const char *_data, size_t _dataSize, RqstCallback _clb) {
+    void finalizeRead(const char *_data, size_t _dataSize, RqstCallback _clb) {
         op = T::READ;
-        data = _data;
-        dataSize = _dataSize;
-        clb = _clb;
-    }
-    void finalizeRemove(const char *_data, size_t _dataSize, RqstCallback _clb) {
-        op = T::DELETE;
         data = _data;
         dataSize = _dataSize;
         clb = _clb;
@@ -76,21 +70,16 @@ class Rqst {
     unsigned char taskBuffer[256];
     uint64_t devAddrBuf[2];
 
-    static BdevCpp::GeneralPool<Rqst, BdevCpp::ClassAlloc<Rqst>> updatePool;
-    static BdevCpp::GeneralPool<Rqst, BdevCpp::ClassAlloc<Rqst>> getPool;
-    static BdevCpp::GeneralPool<Rqst, BdevCpp::ClassAlloc<Rqst>> removePool;
+    static BdevCpp::GeneralPool<Rqst, BdevCpp::ClassAlloc<Rqst>> writePool;
+    static BdevCpp::GeneralPool<Rqst, BdevCpp::ClassAlloc<Rqst>> readPool;
 };
 
 template <class T>
 BdevCpp::GeneralPool<Rqst<T>, BdevCpp::ClassAlloc<Rqst<T>>>
-    Rqst<T>::updatePool(100, "updateRqstPool");
+    Rqst<T>::writePool(100, "writeRqstPool");
 
 template <class T>
 BdevCpp::GeneralPool<Rqst<T>, BdevCpp::ClassAlloc<Rqst<T>>>
-    Rqst<T>::getPool(100, "getRqstPool");
-
-template <class T>
-BdevCpp::GeneralPool<Rqst<T>, BdevCpp::ClassAlloc<Rqst<T>>>
-    Rqst<T>::removePool(100, "removeRqstPool");
+    Rqst<T>::readPool(100, "readRqstPool");
 
 } // namespace BdevCpp

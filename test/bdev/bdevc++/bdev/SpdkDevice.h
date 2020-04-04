@@ -41,7 +41,7 @@ struct DeviceAddr {
     } busAddr __attribute__((packed));
 };
 
-enum class IoOp : std::int8_t { NONE = 0, READ, UPDATE, DELETE };
+enum class IoOp : std::int8_t { NONE = 0, READ, WRITE };
 using IoRqst = Rqst<IoOp>;
 
 typedef IoDevType SpdkDeviceClass;
@@ -103,7 +103,6 @@ class SpdkDevice {
 
     virtual bool write(DeviceTask *task) = 0;
     virtual bool read(DeviceTask *task) = 0;
-    virtual bool remove(DeviceTask *task) = 0;
     virtual int reschedule(DeviceTask *task) = 0;
 
     virtual void enableStats(bool en) = 0;

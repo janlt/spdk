@@ -19,9 +19,15 @@
 namespace BdevCpp {
 
 class SyncApi : public ApiBase {
-  public:
-    SyncApi(const Options &options);
+   friend class Api;
+    SyncApi(IoPoller *_spio);
     virtual ~SyncApi();
+
+    IoPoller *spio;
+
+    public:
+      int read(char *buffer, size_t bufferSize);
+      int write(const char *data, size_t dataSize);
 };
 
 } // namespace BdevCpp

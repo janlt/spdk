@@ -70,9 +70,8 @@ class IoPoller : public Poller<IoRqst> {
 
   private:
 
-    void _processGet(IoRqst *rqst);
-    void _processUpdate(IoRqst *rqst);
-    void _processRemove(IoRqst *rqst);
+    void _processRead(IoRqst *rqst);
+    void _processWrite(IoRqst *rqst);
 
     inline void _rqstClb(const IoRqst *rqst, StatusCode status) {
         if (rqst->clb)

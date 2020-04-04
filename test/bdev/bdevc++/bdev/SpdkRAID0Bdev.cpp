@@ -44,8 +44,6 @@ bool SpdkRAID0Bdev::read(DeviceTask *task) { return true; }
 
 bool SpdkRAID0Bdev::write(DeviceTask *task) { return true; }
 
-bool SpdkRAID0Bdev::remove(DeviceTask *task) { return true; }
-
 int SpdkRAID0Bdev::reschedule(DeviceTask *task) { return 0; }
 
 void SpdkRAID0Bdev::deinit() {}

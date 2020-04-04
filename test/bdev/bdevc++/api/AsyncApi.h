@@ -19,9 +19,15 @@
 namespace BdevCpp {
 
 class AsyncApi : public ApiBase {
-  public:
-    AsyncApi(const Options &options);
+    friend class Api;
+    AsyncApi(IoPoller *_spio);
     virtual ~AsyncApi();
+
+    IoPoller *spio;
+
+  public:
+    int read(char *buffer, size_t bufferSize);
+    int write(const char *data, size_t dataSize);
 };
 
 } // namespace BdevCpp

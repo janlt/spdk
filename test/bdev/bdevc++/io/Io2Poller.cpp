@@ -53,21 +53,15 @@ void Io2Poller::process() {
             switch (task->op) {
             case IoOp::READ:
                 if (dropIt == true)
-                    IoRqst::getPool.put(task->rqst);
+                    IoRqst::readPool.put(task->rqst);
                 else
-                    _processGet(task);
+                    _processRead(task);
                 break;
-            case IoOp::UPDATE:
+            case IoOp::WRITE:
                 if (dropIt == true)
-                    IoRqst::updatePool.put(task->rqst);
+                    IoRqst::writePool.put(task->rqst);
                 else
-                    _processUpdate(task);
-                break;
-            case IoOp::DELETE:
-                if (dropIt == true)
-                    IoRqst::removePool.put(task->rqst);
-                else
-                    _processRemove(task);
+                    _processWrite(task);
                 break;
             default:
                 break;
@@ -80,7 +74,7 @@ void Io2Poller::process() {
     }
 }
 
-void Io2Poller::_processGet(DeviceTask *task) {
+void Io2Poller::_processRead(DeviceTask *task) {
     SpdkBdev *bdev = reinterpret_cast<SpdkBdev *>(task->bdev);
 
     if (task->result) {
@@ -94,10 +88,10 @@ void Io2Poller::_processGet(DeviceTask *task) {
 
     bdev->ioPoolMgr->putIoReadBuf(task->buff);
     bdev->ioBufsInUse--;
-    IoRqst::getPool.put(task->rqst);
+    IoRqst::readPool.put(task->rqst);
 }
 
-void Io2Poller::_processUpdate(DeviceTask *task) {
+void Io2Poller::_processWrite(DeviceTask *task) {
     SpdkBdev *bdev = reinterpret_cast<SpdkBdev *>(task->bdev);
     DeviceAddr devAddr;
     devAddr.busAddr.pciAddr = bdev->spBdevCtx.pci_addr;
@@ -111,19 +105,7 @@ void Io2Poller::_processUpdate(DeviceTask *task) {
             task->clb(StatusCode::UNKNOWN_ERROR, nullptr, 0);
     }
 
-    IoRqst::updatePool.put(task->rqst);
-}
-
-void Io2Poller::_processRemove(DeviceTask *task) {
-    if (task->result == true) {
-        if (task->clb)
-            task->clb(StatusCode::OK, nullptr, 0);
-    } else {
-        if (task->clb)
-            task->clb(StatusCode::UNKNOWN_ERROR, nullptr, 0);
-    }
-
-    IoRqst::removePool.put(task->rqst);
+    IoRqst::writePool.put(task->rqst);
 }
 
 } // namespace BdevCpp

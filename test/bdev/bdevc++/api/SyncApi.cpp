@@ -20,12 +20,11 @@
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <mutex>
 
 #include <boost/asio.hpp>
 #include <boost/filesystem.hpp>
 
-#include <iostream>
-#include <sstream>
 #include <string>
 #include <atomic>
 #include <cstdint>
@@ -34,9 +33,15 @@
 #include <chrono>
 #include <condition_variable>
 
-#include "spdk/bdev.h"
+#include "spdk/conf.h"
+#include "spdk/cpuset.h"
 #include "spdk/env.h"
+#include "spdk/event.h"
+#include "spdk/ftl.h"
+#include "spdk/log.h"
 #include "spdk/queue.h"
+#include "spdk/stdinc.h"
+#include "spdk/thread.h"
 
 #include "Status.h"
 #include "Options.h"
@@ -58,29 +63,65 @@ using namespace std;
 
 namespace BdevCpp {
 
-SyncApi::SyncApi(const Options &options) {
-    SpdkCore *spc = new SpdkCore(options.io);
-    if ( spc->isBdevFound() == true ) {
-        cout << "Io functionality is enabled" << endl;
-    } else {
-        cerr << "Io functionality is disabled" << endl;
-        return;
-    }
-
-    if (spc->isBdevFound() == false) {
-        cerr << "Bdev not found" << endl;
-        return;
-    }
-
-    IoPoller *spio = new IoPoller(spc);
-
-    spc->setPoller(spio);
-    if (spc->isSpdkReady() == true) {
-        spc->startSpdk();
-        spc->waitReady(); // synchronize until SpdkCore is done initializing SPDK framework
-    }
-}
-
+SyncApi::SyncApi(IoPoller *_spio)
+    : spio(_spio) {}
 SyncApi::~SyncApi() {}
 
+int SyncApi::read(char *buffer, size_t bufferSize) {
+    mutex mtx;
+    condition_variable cv;
+    bool ready = false;
+    IoRqst *getRqst = IoRqst::readPool.get();
+    getRqst->finalizeRead(nullptr, 0,
+                         [&mtx, &cv, &ready, buffer, bufferSize](
+                             Status status, char *buffer, size_t bufferSize) {
+                             unique_lock<mutex> lck(mtx);
+                             memcpy(buffer, bufferSize);
+                             ready = true;
+                             cv.notify_all();
+                         });
+
+    if (!spio->enqueue(getRqst)) {
+        IoRqst::readPool.put(getRqst);
+        return -1;
+    }
+    // wait for completion
+    {
+        unique_lock<mutex> lk(mtx);
+        cv.wait_for(lk, 1s, [&ready] { return ready; });
+    }
+    if (ready == false)
+        return -1;
+
+    return bufferSize;
+}
+
+int SyncApi::write(const char *data, size_t dataSize) {
+    mutex mtx;
+    condition_variable cv;
+    bool ready = false;
+
+    IoRqst *writeRqst = IoRqst::writePool.get();
+    writeRqst->finalizeWrite(data, dataSize,
+        [&mtx, &cv, &ready](Status status,
+                            const char *data, size_t dataSize) {
+            unique_lock<mutex> lck(mtx);
+            ready = true;
+            cv.notify_all();
+        });
+
+    if (!spio->enqueue(writeRqst)) {
+        IoRqst::writePool.put(writeRqst);
+        return -1;
+    }
+    // wait for completion
+    {
+        unique_lock<mutex> lk(mtx);
+        cv.wait_for(lk, 1s, [&ready] { return ready; });
+        if (ready == false)
+            return -1;
+    }
+
+    return dataSize;
+}
 } // namespace BdevCpp

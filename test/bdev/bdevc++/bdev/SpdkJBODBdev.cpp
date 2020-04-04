@@ -89,20 +89,6 @@ bool SpdkJBODBdev::write(DeviceTask *task) {
     return ret;
 }
 
-bool SpdkJBODBdev::remove(DeviceTask *task) {
-    if (!isRunning)
-        return false;
-
-    for (uint32_t i = 0; i < numDevices; i++) {
-        if (task->bdevAddr->busAddr.pciAddr ==
-            devices[i].addr.busAddr.pciAddr) {
-            task->bdev = devices[i].bdev;
-            return devices[i].bdev->remove(task);
-        }
-    }
-    return false;
-}
-
 int SpdkJBODBdev::reschedule(DeviceTask *task) { return 0; }
 
 void SpdkJBODBdev::deinit() {
