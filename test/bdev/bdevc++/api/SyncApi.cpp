@@ -74,9 +74,9 @@ int SyncApi::read(char *buffer, size_t bufferSize) {
     IoRqst *getRqst = IoRqst::readPool.get();
     getRqst->finalizeRead(nullptr, 0,
                          [&mtx, &cv, &ready, buffer, bufferSize](
-                             Status status, char *buffer, size_t bufferSize) {
+                             Status status, const char *data, size_t dataSize) {
                              unique_lock<mutex> lck(mtx);
-                             memcpy(buffer, bufferSize);
+                             memcpy(buffer, data, dataSize);
                              ready = true;
                              cv.notify_all();
                          });
