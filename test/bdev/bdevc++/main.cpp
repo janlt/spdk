@@ -28,6 +28,9 @@
 #include "bdev/SpdkBdev.h"
 #include "bdev/SpdkIoBuf.h"
 #include "bdev/SpdkCore.h"
+#include "ApiBase.h"
+#include "api/SyncApi.h"
+#include "api/AsyncApi.h"
 
 using namespace std;
 namespace po = boost::program_options;
@@ -54,26 +57,8 @@ int main(int argc, char **argv) {
         return -1;
     }
 
-    BdevCpp::SpdkCore *spc = new BdevCpp::SpdkCore(options.io);
-    if ( spc->isBdevFound() == true ) {
-        cout << "Io functionality is enabled" << endl;
-    } else {
-        cerr << "Io functionality is disabled" << endl;
-        return -1;
-    }
-
-    if (spc->isBdevFound() == false) {
-        cerr << "Bdev not found" << endl;
-        return -1;
-    }
-
-    BdevCpp::IoPoller *spio = new BdevCpp::IoPoller(spc);
-
-    spc->setPoller(spio);
-    if (spc->isSpdkReady() == true) {
-        spc->startSpdk();
-        spc->waitReady(); // synchronize until SpdkCore is done initializing SPDK framework
-    }
+    BdevCpp::SyncApi *sapi = new BdevCpp::SyncApi(options);
+    delete sapi;
 
     return 0;
 }

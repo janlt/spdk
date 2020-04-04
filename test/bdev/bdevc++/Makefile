@@ -13,12 +13,14 @@ CXXFLAGS += -I$(SPDK_ROOT_DIR)/test/bdev/bdevc++/common
 CXXFLAGS += -I$(SPDK_ROOT_DIR)/test/bdev/bdevc++/config
 CXXFLAGS += -I$(SPDK_ROOT_DIR)/test/bdev/bdevc++/io 
 CXXFLAGS += -I$(SPDK_ROOT_DIR)/test/bdev/bdevc++/bdev 
+CXXFLAGS += -I$(SPDK_ROOT_DIR)/test/bdev/bdevc++/api
 CFLAGS += -I$(SPDK_ROOT_DIR)/test/bdev/bdevc++/common
 CFLAGS += -I$(SPDK_ROOT_DIR)/test/bdev/bdevc++/config
 CFLAGS += -I$(SPDK_ROOT_DIR)/test/bdev/bdevc++/io
 CFLAGS += -I$(SPDK_ROOT_DIR)/test/bdev/bdevc++/bdev
+CFLAGS += -I$(SPDK_ROOT_DIR)/test/bdev/bdevc++/api
 
-APP_DIRS = common config io bdev
+APP_DIRS = common config io bdev api
 
 CXX_SRCS := main.cpp
 
@@ -32,7 +34,7 @@ SPDK_LIB_LIST += event_nbd nbd
 endif
 
 #LDFLAGS += -lboost_thread -lpthread -lrt -lnuma -ldl -luuid -lstdc++ -g
-APP_LIBS = bdevc++common bdevc++io bdevc++bdev bdevc++config
+APP_LIBS = bdevc++common bdevc++io bdevc++bdev bdevc++config bdevc++api
 SPDK_LIB_LIST += $(APP_LIBS)
 LDFLAGS += -lboost_thread -lpthread -lrt -lnuma -ldl -luuid -lstdc++ -lboost_filesystem -lconfig++
 
