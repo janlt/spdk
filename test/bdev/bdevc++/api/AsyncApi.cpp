@@ -65,11 +65,19 @@ AsyncApi::AsyncApi(IoPoller *_spio)
     : spio(_spio) {}
 AsyncApi::~AsyncApi() {}
 
-int AsyncApi::read(char *buffer, size_t bufferSize) {
+int AsyncApi::open(const char *name, int flags, mode_t mode) {
     return 0;
 }
 
-int AsyncApi::write(const char *data, size_t dataSize) {
+int AsyncApi::close(int desc) {
+    return 0;
+}
+
+int AsyncApi::read(int desc, char *buffer, size_t bufferSize) {
+    return 0;
+}
+
+int AsyncApi::write(int desc, const char *data, size_t dataSize) {
     return 0;
 }
 

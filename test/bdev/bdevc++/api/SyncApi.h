@@ -25,9 +25,11 @@ class SyncApi : public ApiBase {
 
     IoPoller *spio;
 
-    public:
-      int read(char *buffer, size_t bufferSize);
-      int write(const char *data, size_t dataSize);
+  public:
+    int open(const char *name, int flags, mode_t mode);
+    int close(int desc);
+    int read(int desc, char *buffer, size_t bufferSize);
+    int write(int desc, const char *data, size_t dataSize);
 };
 
 } // namespace BdevCpp

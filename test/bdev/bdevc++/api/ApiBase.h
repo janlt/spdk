@@ -24,8 +24,10 @@ class ApiBase {
     virtual ~ApiBase() = default;
 
   public:
-    virtual int read(char *buffer, size_t bufferSize) = 0;
-    virtual int write(const char *data, size_t dataSize) = 0;
+    virtual int open(const char *name, int flags, mode_t mode) = 0;
+    virtual int close(int desc) = 0;
+    virtual int read(int desc, char *buffer, size_t bufferSize) = 0;
+    virtual int write(int desc, const char *data, size_t dataSize) = 0;
 };
 
 } // namespace BdevCpp

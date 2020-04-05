@@ -14,13 +14,15 @@ CXXFLAGS += -I$(SPDK_ROOT_DIR)/test/bdev/bdevc++/config
 CXXFLAGS += -I$(SPDK_ROOT_DIR)/test/bdev/bdevc++/io 
 CXXFLAGS += -I$(SPDK_ROOT_DIR)/test/bdev/bdevc++/bdev 
 CXXFLAGS += -I$(SPDK_ROOT_DIR)/test/bdev/bdevc++/api
+CXXFLAGS += -I$(SPDK_ROOT_DIR)/test/bdev/bdevc++/fileio
 CFLAGS += -I$(SPDK_ROOT_DIR)/test/bdev/bdevc++/common
 CFLAGS += -I$(SPDK_ROOT_DIR)/test/bdev/bdevc++/config
 CFLAGS += -I$(SPDK_ROOT_DIR)/test/bdev/bdevc++/io
 CFLAGS += -I$(SPDK_ROOT_DIR)/test/bdev/bdevc++/bdev
 CFLAGS += -I$(SPDK_ROOT_DIR)/test/bdev/bdevc++/api
+CFLAGS += -I$(SPDK_ROOT_DIR)/test/bdev/bdevc++/fileio
 
-APP_DIRS = common config io bdev api
+APP_DIRS = common config io bdev api fileio
 
 CXX_SRCS := main.cpp
 
@@ -34,7 +36,7 @@ SPDK_LIB_LIST += event_nbd nbd
 endif
 
 #LDFLAGS += -lboost_thread -lpthread -lrt -lnuma -ldl -luuid -lstdc++ -g
-APP_LIBS = bdevc++common bdevc++io bdevc++bdev bdevc++config bdevc++api
+APP_LIBS = bdevc++common bdevc++io bdevc++bdev bdevc++config bdevc++api bdevc++fileio
 SPDK_LIB_LIST += $(APP_LIBS)
 LDFLAGS += -lboost_thread -lpthread -lrt -lnuma -ldl -luuid -lstdc++ -lboost_filesystem -lconfig++
 

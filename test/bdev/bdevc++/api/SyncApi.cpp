@@ -58,6 +58,7 @@
 
 #include "ApiBase.h"
 #include "SyncApi.h"
+#include "FileEmu.h"
 
 using namespace std;
 
@@ -65,12 +66,44 @@ namespace BdevCpp {
 
 SyncApi::SyncApi(IoPoller *_spio)
     : spio(_spio) {}
+
 SyncApi::~SyncApi() {}
 
-int SyncApi::read(char *buffer, size_t bufferSize) {
+int SyncApi::open(const char *name, int flags, mode_t mode) {
+    FileEmu *femu = new FileEmu(name, flags, mode);
+    if (femu->desc < 0)
+        return -1;
+    FileMap &map = FileMap::getInstance();
+    if (map.putFile(femu) < 0) {
+        delete femu;
+        return -1;
+    }
+    return femu->desc;
+}
+
+int SyncApi::close(int desc) {
+    FileMap &map = FileMap::getInstance();
+    FileEmu *femu = map.getFile(desc);
+    if (!femu)
+        return -1;
+
+    map.closeFile(desc);
+    int sts = ::close(fd);
+    delete femu;
+    return sts;
+}
+
+int SyncApi::read(int desc, char *buffer, size_t bufferSize) {
     mutex mtx;
     condition_variable cv;
     bool ready = false;
+
+    FileMap &map = FileMap::getInstance();
+    FileEmu *femu = map.getFile(desc);
+    if (!femu)
+        return -1;
+
+
     IoRqst *getRqst = IoRqst::readPool.get();
     getRqst->finalizeRead(nullptr, 0,
                          [&mtx, &cv, &ready, buffer, bufferSize](
@@ -96,7 +129,7 @@ int SyncApi::read(char *buffer, size_t bufferSize) {
     return bufferSize;
 }
 
-int SyncApi::write(const char *data, size_t dataSize) {
+int SyncApi::write(int desc, const char *data, size_t dataSize) {
     mutex mtx;
     condition_variable cv;
     bool ready = false;
