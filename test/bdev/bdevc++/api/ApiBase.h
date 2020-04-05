@@ -23,6 +23,9 @@ class ApiBase {
     ApiBase() = default;
     virtual ~ApiBase() = default;
 
+  protected:
+    virtual int getIoPos(int desc, uint64_t &lba, uint8_t &lun) = 0;
+
   public:
     virtual int open(const char *name, int flags, mode_t mode) = 0;
     virtual int close(int desc) = 0;

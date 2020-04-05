@@ -88,9 +88,19 @@ int SyncApi::close(int desc) {
         return -1;
 
     map.closeFile(desc);
-    int sts = ::close(fd);
+    int sts = ::close(femu->fd);
     delete femu;
     return sts;
+}
+
+int SyncApi::getIoPos(int desc, uint64_t &lba, uint8_t &lun) {
+    FileMap &map = FileMap::getInstance();
+    FileEmu *femu = map.getFile(desc);
+    if (!femu)
+        return -1;
+    lba = femu->pos.posLba + femu->geom.startLba;
+    lun = femu->pos.posLun;
+    return 0;
 }
 
 int SyncApi::read(int desc, char *buffer, size_t bufferSize) {
@@ -98,11 +108,10 @@ int SyncApi::read(int desc, char *buffer, size_t bufferSize) {
     condition_variable cv;
     bool ready = false;
 
-    FileMap &map = FileMap::getInstance();
-    FileEmu *femu = map.getFile(desc);
-    if (!femu)
+    uint64_t lba;
+    uint8_t lun;
+    if (getIoPos(desc, lba, lun) < 0)
         return -1;
-
 
     IoRqst *getRqst = IoRqst::readPool.get();
     getRqst->finalizeRead(nullptr, 0,
@@ -112,7 +121,8 @@ int SyncApi::read(int desc, char *buffer, size_t bufferSize) {
                              memcpy(buffer, data, dataSize);
                              ready = true;
                              cv.notify_all();
-                         });
+                         },
+                         lba, lun);
 
     if (!spio->enqueue(getRqst)) {
         IoRqst::readPool.put(getRqst);
@@ -122,9 +132,9 @@ int SyncApi::read(int desc, char *buffer, size_t bufferSize) {
     {
         unique_lock<mutex> lk(mtx);
         cv.wait_for(lk, 1s, [&ready] { return ready; });
+        if (ready == false)
+            return -1;
     }
-    if (ready == false)
-        return -1;
 
     return bufferSize;
 }
@@ -134,6 +144,11 @@ int SyncApi::write(int desc, const char *data, size_t dataSize) {
     condition_variable cv;
     bool ready = false;
 
+    uint64_t lba;
+    uint8_t lun;
+    if (getIoPos(desc, lba, lun) < 0)
+        return -1;
+
     IoRqst *writeRqst = IoRqst::writePool.get();
     writeRqst->finalizeWrite(data, dataSize,
         [&mtx, &cv, &ready](Status status,
@@ -141,7 +156,8 @@ int SyncApi::write(int desc, const char *data, size_t dataSize) {
             unique_lock<mutex> lck(mtx);
             ready = true;
             cv.notify_all();
-        });
+        },
+        lba, lun);
 
     if (!spio->enqueue(writeRqst)) {
         IoRqst::writePool.put(writeRqst);

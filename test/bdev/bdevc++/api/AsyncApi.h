@@ -25,6 +25,9 @@ class AsyncApi : public ApiBase {
 
     IoPoller *spio;
 
+  protected:
+    int getIoPos(int desc, uint64_t &lba, uint8_t &lun);
+
   public:
     int open(const char *name, int flags, mode_t mode);
     int close(int desc);

@@ -41,25 +41,32 @@ using RqstCallback = std::function<void(Status status, const char *data, const s
 template <class T>
 class Rqst {
   public:
-    Rqst(const T op, const char *data,
-         size_t dataSize, RqstCallback clb)
-        : op(op), data(data),
-          dataSize(dataSize), clb(clb) {}
+    Rqst(const T _op, const char *_data,
+         size_t _dataSize, RqstCallback _clb,
+         uint64_t _lba = -1, uint32_t _lun = -1)
+        : op(_op), data(_data),
+          dataSize(_dataSize), clb(_clb), lba(_lba), lun(_lun) {}
     Rqst()
         : op(T::NONE), data(0), dataSize(0),
-          clb(0) {};
+          clb(0), lba(-1), lun(-1) {};
     virtual ~Rqst() = default;
-    void finalizeWrite(const char *_data, size_t _dataSize, RqstCallback _clb) {
+    void finalizeWrite(const char *_data, size_t _dataSize, RqstCallback _clb,
+            uint64_t _lba, uint32_t _lun) {
         op = T::WRITE;
         data = _data;
         dataSize = _dataSize;
         clb = _clb;
+        lba = _lba;
+        lun = _lun;
     }
-    void finalizeRead(const char *_data, size_t _dataSize, RqstCallback _clb) {
+    void finalizeRead(const char *_data, size_t _dataSize, RqstCallback _clb,
+            uint64_t _lba, uint32_t _lun) {
         op = T::READ;
         data = _data;
         dataSize = _dataSize;
         clb = _clb;
+        lba = _lba;
+        lun = _lun;
     }
 
     T op;
@@ -67,6 +74,8 @@ class Rqst {
     size_t dataSize = 0;
 
     RqstCallback clb;
+    uint64_t lba;
+    uint32_t lun;
     unsigned char taskBuffer[256];
     uint64_t devAddrBuf[2];
 

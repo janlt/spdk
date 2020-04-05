@@ -58,6 +58,7 @@
 
 #include "ApiBase.h"
 #include "AsyncApi.h"
+#include "FileEmu.h"
 
 namespace BdevCpp {
 
@@ -70,6 +71,16 @@ int AsyncApi::open(const char *name, int flags, mode_t mode) {
 }
 
 int AsyncApi::close(int desc) {
+    return 0;
+}
+
+int AsyncApi::getIoPos(int desc, uint64_t &lba, uint8_t &lun) {
+    FileMap &map = FileMap::getInstance();
+    FileEmu *femu = map.getFile(desc);
+    if (!femu)
+        return -1;
+    lba = femu->pos.posLba + femu->geom.startLba;
+    lun = femu->pos.posLun;
     return 0;
 }
 

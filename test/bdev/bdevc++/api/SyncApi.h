@@ -19,11 +19,14 @@
 namespace BdevCpp {
 
 class SyncApi : public ApiBase {
-   friend class Api;
+  friend class Api;
     SyncApi(IoPoller *_spio);
     virtual ~SyncApi();
 
     IoPoller *spio;
+
+  protected:
+    int getIoPos(int desc, uint64_t &lba, uint8_t &lun);
 
   public:
     int open(const char *name, int flags, mode_t mode);
