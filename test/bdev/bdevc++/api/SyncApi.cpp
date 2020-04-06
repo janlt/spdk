@@ -70,27 +70,15 @@ SyncApi::SyncApi(IoPoller *_spio)
 SyncApi::~SyncApi() {}
 
 int SyncApi::open(const char *name, int flags, mode_t mode) {
-    FileEmu *femu = new FileEmu(name, flags, mode);
-    if (femu->desc < 0)
-        return -1;
-    FileMap &map = FileMap::getInstance();
-    if (map.putFile(femu, storageGeom->blk_num[0], storageGeom->dev_num) < 0) {
-        delete femu;
-        return -1;
-    }
-    return femu->desc;
+    return ApiBase::open(name, flags, mode);
 }
 
 int SyncApi::close(int desc) {
-    FileMap &map = FileMap::getInstance();
-    FileEmu *femu = map.getFile(desc);
-    if (!femu)
-        return -1;
+    return ApiBase::close(desc);
+}
 
-    map.closeFile(desc);
-    int sts = ::close(femu->fd);
-    delete femu;
-    return sts;
+off_t SyncApi::lseek(int fd, off_t offset, int whence) {
+    return ApiBase::lseek(fd, offset, whence);
 }
 
 int SyncApi::getIoPos(int desc, uint64_t &lba, uint8_t &lun) {

@@ -1,3 +1,5 @@
+#include <errno.h>
+
 #include <iostream>
 #include <memory>
 #include <boost/filesystem.hpp>
@@ -39,6 +41,82 @@ namespace po = boost::program_options;
 
 const char *spdk_conf = "config.spdk";
 
+static int SyncOpenCloseTest( BdevCpp::SyncApi *api, const char *file_name) {
+    int fd = api->open(file_name, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
+    if (fd < 0) {
+        cerr << "open: " << file_name << " failed errno: " << errno << endl;
+        return -1;
+    }
+    int rc =  api->close(fd);
+    if (rc < 0)
+        cerr << "close sync failed rc: " << rc << endl;
+
+    return rc;
+}
+
+static int AsyncOpenCloseTest(BdevCpp::AsyncApi *api, const char *file_name) {
+    int fd = api->open(file_name, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
+    if (fd < 0) {
+        cerr << "open: " << file_name << " failed errno: " << errno << endl;
+        return -1;
+    }
+    int rc =  api->close(fd);
+    if (rc < 0)
+        cerr << "close sync failed rc: " << rc << endl;
+
+    return rc;
+}
+
+static int SyncIoTest(BdevCpp::SyncApi *api, const char *file_name) {
+    int rc = 0;
+    char buf[25000];
+    char cmp_buf[25000];
+
+    int fd = api->open(file_name, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
+    if (fd < 0) {
+        cerr << "open: " << file_name << " failed errno: " << errno << endl;
+        return -1;
+    }
+
+    for (int i = 0 ; i < 10 ; i++) {
+        size_t io_size = 512*(2*2 + 1);
+        ::memset(buf, 'a' + i, io_size);
+        rc = api->write(fd, buf, io_size);
+        if (rc < 0) {
+            cerr << "write sync failed rc: " << rc << " errno: " << errno << endl;
+            break;
+        }
+    }
+
+    rc = api->lseek(fd, 0, SEEK_SET);
+    if (rc < 0) {
+        cerr << "week sync failed rc: " << rc << " errno: " << errno << endl;
+        return rc;
+    }
+
+    for (int i = 0 ; i < 10 ; i++) {
+        size_t io_size = 512*(2*2 + 1);
+        ::memset(cmp_buf, 'a' + i, io_size);
+        rc = api->read(fd, buf, io_size);
+        if (rc < 0) {
+            cerr << "read sync failed rc: " << rc << " errno: " << errno << endl;
+            rc = -1;
+            break;
+        }
+        if (memcmp(buf, cmp_buf, io_size)) {
+            cerr << "Corrupted data after read i: " << i << " io_size: " << io_size << endl;
+            rc = -1;
+            break;
+        }
+    }
+
+    return rc;
+}
+
+static int AsyncIoTest(BdevCpp::AsyncApi *aApi, const char *file_name) {
+    return 0;
+}
+
 int main(int argc, char **argv) {
     int rc = 0;
     BdevCpp::Options options;
@@ -68,24 +146,22 @@ int main(int argc, char **argv) {
     if (argc > 1)
         sync_file_name = argv[1];
 
-    int fds = syncApi->open(sync_file_name, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
-    if (fds < 0) {
-        cerr << "open: " << sync_file_name << " failed errno: " << errno << endl;
-        rc = -1;
-    }
+    rc = SyncOpenCloseTest(syncApi, sync_file_name);
 
     const char *async_file_name = "testasync";
     if (argc > 2)
         async_file_name = argv[2];
 
-    int fda = asyncApi->open(async_file_name, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
-    if (fda < 0) {
-        cerr << "open: " << async_file_name << " failed errno: " << errno << endl;
-        rc = -1;
-    }
+    rc = AsyncOpenCloseTest(asyncApi, async_file_name);
 
-    syncApi->close(fds);
-    asyncApi->close(fda);
+    if (rc < 0)
+        return rc;
+
+    rc = SyncIoTest(syncApi, sync_file_name);
+    cout << "SyncIoTest rc: " << rc << endl;
+
+    rc = AsyncIoTest(asyncApi, async_file_name);
+    cout << "AsyncIoTest rc: " << rc << endl;
 
     return rc;
 }

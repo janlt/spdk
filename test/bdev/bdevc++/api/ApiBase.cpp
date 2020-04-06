@@ -16,6 +16,8 @@
 
 #include <stdio.h>
 #include <time.h>
+#include <sys/types.h>
+#include <unistd.h>
 
 #include <iostream>
 #include <sstream>
@@ -57,43 +59,41 @@
 #include "SpdkCore.h"
 
 #include "ApiBase.h"
-#include "AsyncApi.h"
 #include "FileEmu.h"
 
 namespace BdevCpp {
 
-AsyncApi::AsyncApi(IoPoller *_spio)
-    : spio(_spio) {}
-AsyncApi::~AsyncApi() {}
+int ApiBase::open(const char *name, int flags, mode_t mode) {
+    FileEmu *femu = new FileEmu(name, flags, mode);
+    if (femu->desc < 0)
+        return -1;
 
-int AsyncApi::open(const char *name, int flags, mode_t mode) {
-    return ApiBase::open(name, flags, mode);
+    FileMap &map = FileMap::getInstance();
+    if (map.putFile(femu, storageGeom->blk_num[0], storageGeom->dev_num) < 0) {
+        delete femu;
+        return -1;
+    }
+    return femu->desc;
 }
 
-int AsyncApi::close(int desc) {
-    return ApiBase::close(desc);
-}
-
-off_t AsyncApi::lseek(int fd, off_t offset, int whence) {
-    return ApiBase::lseek(fd, offset, whence);
-}
-
-int AsyncApi::getIoPos(int desc, uint64_t &lba, uint8_t &lun) {
+int ApiBase::close(int desc) {
     FileMap &map = FileMap::getInstance();
     FileEmu *femu = map.getFile(desc);
     if (!femu)
         return -1;
-    lba = femu->pos.posLba + femu->geom.startLba;
-    lun = femu->pos.posLun;
-    return 0;
+
+    int fd = femu->fd;
+    map.closeFile(desc);
+    return ::close(fd);
 }
 
-int AsyncApi::read(int desc, char *buffer, size_t bufferSize) {
-    return 0;
-}
+off_t ApiBase::lseek(int desc, off_t offset, int whence) {
+    FileMap &map = FileMap::getInstance();
+    FileEmu *femu = map.getFile(desc);
+    if (!femu)
+        return static_cast<off_t>(-1);
 
-int AsyncApi::write(int desc, const char *data, size_t dataSize) {
-    return 0;
+    return femu->lseek(offset, whence);
 }
 
 } // namespace BdevCpp

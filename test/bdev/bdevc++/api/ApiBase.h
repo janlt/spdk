@@ -18,8 +18,6 @@
 
 namespace BdevCpp {
 
-class Api;
-
 class ApiBase {
   public:
     ApiBase() = default;
@@ -29,10 +27,11 @@ class ApiBase {
     virtual int getIoPos(int desc, uint64_t &lba, uint8_t &lun) = 0;
 
   public:
-    virtual int open(const char *name, int flags, mode_t mode) = 0;
+    virtual int open(const char *name, int flags, mode_t mode = S_IRUSR | S_IWUSR) = 0;
     virtual int close(int desc) = 0;
     virtual int read(int desc, char *buffer, size_t bufferSize) = 0;
     virtual int write(int desc, const char *data, size_t dataSize) = 0;
+    virtual off_t lseek(int fd, off_t offset, int whence) = 0;
 
     BdevGeom *storageGeom;
 };

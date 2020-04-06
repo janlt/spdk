@@ -29,10 +29,11 @@ class AsyncApi : public ApiBase {
     int getIoPos(int desc, uint64_t &lba, uint8_t &lun);
 
   public:
-    int open(const char *name, int flags, mode_t mode);
+    int open(const char *name, int flags, mode_t mode = S_IRUSR | S_IWUSR);
     int close(int desc);
     int read(int desc, char *buffer, size_t bufferSize);
     int write(int desc, const char *data, size_t dataSize);
+    off_t lseek(int fd, off_t offset, int whence);
 };
 
 } // namespace BdevCpp
