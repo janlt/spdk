@@ -74,7 +74,7 @@ int SyncApi::open(const char *name, int flags, mode_t mode) {
     if (femu->desc < 0)
         return -1;
     FileMap &map = FileMap::getInstance();
-    if (map.putFile(femu) < 0) {
+    if (map.putFile(femu, storageGeom->blk_num[0], storageGeom->dev_num) < 0) {
         delete femu;
         return -1;
     }

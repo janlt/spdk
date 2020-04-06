@@ -70,23 +70,16 @@ bool SpdkJBODBdev::read(DeviceTask *task) {
     if (!isRunning)
         return false;
 
-    int32_t idx = deviceHash[hashAddr(task->bdevAddr)];
-    if (idx < 0)
-        return false;
-    task->bdev = devices[static_cast<uint32_t>(idx)].bdev;
-    return devices[static_cast<uint32_t>(idx)].bdev->read(task);
+    task->bdev = devices[task->bdevIdx].bdev;
+    return devices[task->bdevIdx].bdev->read(task);
 }
 
 bool SpdkJBODBdev::write(DeviceTask *task) {
     if (!isRunning)
         return false;
 
-    uint32_t currDev = currDevice;
-    task->bdev = devices[currDev].bdev;
-    bool ret = devices[currDev].bdev->write(task);
-    currDevice++;
-    currDevice %= numDevices;
-    return ret;
+    task->bdev = devices[task->bdevIdx].bdev;
+    return devices[task->bdevIdx].bdev->write(task);
 }
 
 int SpdkJBODBdev::reschedule(DeviceTask *task) { return 0; }
@@ -162,6 +155,16 @@ void SpdkJBODBdev::IOAbort() {
     for (uint32_t i = 0; i < numDevices; i++) {
         devices[i].bdev->IOAbort();
     }
+}
+
+BdevGeom SpdkJBODBdev::getBdevGeom() {
+    BdevGeom geom;
+    geom.dev_num = numDevices;
+    geom.type = SpdkDeviceClass::JBOD;
+    for (uint32_t i = 0; i < numDevices; i++)
+        geom.blk_num[i] = devices[i].bdev->spBdevCtx.blk_num;
+
+    return geom;
 }
 
 } // namespace BdevCpp

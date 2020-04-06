@@ -18,6 +18,8 @@
 
 namespace BdevCpp {
 
+class Api;
+
 class ApiBase {
   public:
     ApiBase() = default;
@@ -31,6 +33,8 @@ class ApiBase {
     virtual int close(int desc) = 0;
     virtual int read(int desc, char *buffer, size_t bufferSize) = 0;
     virtual int write(int desc, const char *data, size_t dataSize) = 0;
+
+    BdevGeom *storageGeom;
 };
 
 } // namespace BdevCpp

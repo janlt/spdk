@@ -28,6 +28,7 @@
 #include "bdev/SpdkBdev.h"
 #include "bdev/SpdkIoBuf.h"
 #include "bdev/SpdkCore.h"
+#include "FileEmu.h"
 #include "ApiBase.h"
 #include "api/SyncApi.h"
 #include "api/AsyncApi.h"
@@ -39,6 +40,7 @@ namespace po = boost::program_options;
 const char *spdk_conf = "config.spdk";
 
 int main(int argc, char **argv) {
+    int rc = 0;
     BdevCpp::Options options;
     BdevCpp::Options spdk_options;
 
@@ -62,5 +64,28 @@ int main(int argc, char **argv) {
     BdevCpp::SyncApi *syncApi = api.getSyncApi();
     BdevCpp::AsyncApi *asyncApi = api.getAsyncApi();
 
-    return 0;
+    const char *sync_file_name = "testsync";
+    if (argc > 1)
+        sync_file_name = argv[1];
+
+    int fds = syncApi->open(sync_file_name, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
+    if (fds < 0) {
+        cerr << "open: " << sync_file_name << " failed errno: " << errno << endl;
+        rc = -1;
+    }
+
+    const char *async_file_name = "testasync";
+    if (argc > 2)
+        async_file_name = argv[2];
+
+    int fda = asyncApi->open(async_file_name, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
+    if (fda < 0) {
+        cerr << "open: " << async_file_name << " failed errno: " << errno << endl;
+        rc = -1;
+    }
+
+    syncApi->close(fds);
+    asyncApi->close(fda);
+
+    return rc;
 }

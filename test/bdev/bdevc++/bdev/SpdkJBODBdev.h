@@ -95,6 +95,8 @@ class SpdkJBODBdev : public SpdkDevice {
     virtual void setRunning(int running) { isRunning = running; }
     virtual bool IsRunning(int running) { return isRunning; }
 
+    virtual BdevGeom getBdevGeom();
+
     static SpdkDeviceClass bdev_class;
 
     bool statsEnabled;

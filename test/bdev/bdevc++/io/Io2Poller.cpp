@@ -95,7 +95,7 @@ void Io2Poller::_processWrite(DeviceTask *task) {
     SpdkBdev *bdev = reinterpret_cast<SpdkBdev *>(task->bdev);
     DeviceAddr devAddr;
     devAddr.busAddr.pciAddr = bdev->spBdevCtx.pci_addr;
-    devAddr.lba = task->freeLba;
+    devAddr.lba = task->lba;
 
     if (task->result == true) {
         if (task->clb)

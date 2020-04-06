@@ -34,7 +34,9 @@ class Api {
     static SyncApi *syncApi;
     static AsyncApi *asyncApi;
 
+    SpdkCore *spc;
     IoPoller *spio;
+    BdevGeom storageGeom;
     std::mutex instanceMutex;
 };
 

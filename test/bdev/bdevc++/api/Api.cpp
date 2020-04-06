@@ -68,8 +68,8 @@ SyncApi *Api::syncApi = 0;
 AsyncApi *Api::asyncApi = 0;
 
 Api::Api(const Options &options)
-    : spio(0) {
-    SpdkCore *spc = new SpdkCore(options.io);
+    : spc(0), spio(0) {
+    spc = new SpdkCore(options.io);
     if ( spc->isBdevFound() == true ) {
         cout << "Io functionality is enabled" << endl;
     } else {
@@ -79,6 +79,7 @@ Api::Api(const Options &options)
 
     if (spc->isBdevFound() == false) {
         cerr << "Bdev not found" << endl;
+        delete spc;
         return;
     }
 
@@ -90,11 +91,14 @@ Api::Api(const Options &options)
         spc->waitReady(); // synchronize until SpdkCore is done initializing SPDK framework
     }
 
+    storageGeom = spc->getBdev()->getBdevGeom();
+
     unique_lock<Lock> r_lock(instanceMutex);
 
     if (!Api::syncApi) {
         try {
             Api::syncApi = new SyncApi(spio);
+            Api::syncApi->storageGeom = &storageGeom;
         } catch (...) {
             cerr << "Instantiating SyncApi failed" << endl;
             Api::syncApi = 0;
@@ -104,6 +108,7 @@ Api::Api(const Options &options)
     if (!Api::asyncApi) {
         try {
             Api::asyncApi = new AsyncApi(spio);
+            Api::asyncApi->storageGeom = &storageGeom;
         } catch (...) {
             cerr << "Instantiating AsyncApi failed" << endl;
             Api::asyncApi = 0;

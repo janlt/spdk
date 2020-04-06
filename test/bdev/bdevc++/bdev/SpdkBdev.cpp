@@ -191,7 +191,7 @@ void SpdkBdev::writeQueueIoWait(void *cb_arg) {
 
     int w_rc = spdk_bdev_write_blocks(
         bdev->spBdevCtx.bdev_desc, bdev->spBdevCtx.io_channel,
-        task->buff->getSpdkDmaBuf(), task->blockSize * task->freeLba,
+        task->buff->getSpdkDmaBuf(), task->blockSize * task->lba,
         task->blockSize, SpdkBdev::writeComplete, task);
 
     /* If a write IO still fails due to shortage of io buffers, queue it up for
@@ -305,7 +305,7 @@ bool SpdkBdev::doWrite(DeviceTask *task) {
 #else
     int w_rc = spdk_bdev_write_blocks(
         bdev->spBdevCtx.bdev_desc, bdev->spBdevCtx.io_channel,
-        task->buff->getSpdkDmaBuf(), task->blockSize * task->freeLba,
+        task->buff->getSpdkDmaBuf(), task->blockSize * task->lba,
         task->blockSize, SpdkBdev::writeComplete, task);
 #endif
     bdev->stats.outstanding_io_cnt++;
@@ -558,6 +558,15 @@ void SpdkBdev::ioEngineThreadMain() {
     isRunning = 5;
 
     spdk_poller_unregister(&spdk_io_poller);
+}
+
+BdevGeom SpdkBdev::getBdevGeom() {
+    BdevGeom geom;
+    geom.dev_num = 1;
+    geom.type = SpdkDeviceClass::BDEV;
+    geom.blk_num[0] = spBdevCtx.blk_num;
+
+    return geom;
 }
 
 void SpdkBdev::setMaxQueued(uint32_t io_cache_size, uint32_t blk_size) {}

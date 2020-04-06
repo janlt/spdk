@@ -59,9 +59,10 @@ struct DeviceTask {
     SpdkDevice *bdev = nullptr;
     IoRqst *rqst = nullptr;
     IoOp op;
+    uint64_t lba;
+    uint32_t bdevIdx;
     struct spdk_bdev_io_wait_entry bdev_io_wait;
     bool result;
-    uint64_t freeLba;
     bool routing = true;
 };
 
@@ -91,6 +92,13 @@ extern "C" struct SpdkBdevCtx {
     uint32_t io_min_size = 4096;
     CSpdkBdevState state;
     struct PciAddr pci_addr;
+};
+
+struct BdevGeom {
+    const static uint32_t maxDevices = 64;
+    IoDevType type;
+    uint32_t dev_num;
+    uint64_t blk_num[maxDevices];
 };
 
 /*
@@ -130,6 +138,8 @@ class SpdkDevice {
     virtual uint32_t getIoCacheSize() = 0;
     virtual void setRunning(int running) = 0;
     virtual bool IsRunning(int running) = 0;
+
+    virtual BdevGeom getBdevGeom() = 0;
 
     uint64_t blkNumForLba = 0;
     SpdkBdevCtx spBdevCtx;

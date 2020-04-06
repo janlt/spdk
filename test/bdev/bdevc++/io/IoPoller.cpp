@@ -55,13 +55,15 @@ void IoPoller::_processRead(IoRqst *rqst) {
 
     DeviceTask *ioTask =
         new (rqst->taskBuffer) DeviceTask{0,
-                                          spdkDev->getOptimalSize(rqst->dataSize),
-                                          0,
-                                          0,
-                                          rqst->clb,
-                                          spdkDev,
-                                          rqst,
-                                          IoOp::READ};
+            spdkDev->getOptimalSize(rqst->dataSize),
+            0,
+            0,
+            rqst->clb,
+            spdkDev,
+            rqst,
+            IoOp::READ,
+            rqst->lba,
+            rqst->lun};
 
     if (spdkDev->read(ioTask) != true) {
         _rqstClb(rqst, StatusCode::UNKNOWN_ERROR);
@@ -88,13 +90,15 @@ void IoPoller::_processWrite(IoRqst *rqst) {
 
     ioTask = new (rqst->taskBuffer)
         DeviceTask{0,
-                   spdkDev->getOptimalSize(rqst->dataSize),
-                   spdkDev->getSizeInBlk(valSizeAlign),
-                   new (rqst->devAddrBuf) DeviceAddr,
-                   rqst->clb,
-                   spdkDev,
-                   rqst,
-                   IoOp::WRITE};
+            spdkDev->getOptimalSize(rqst->dataSize),
+            spdkDev->getSizeInBlk(valSizeAlign),
+            new (rqst->devAddrBuf) DeviceAddr,
+            rqst->clb,
+            spdkDev,
+            rqst,
+            IoOp::WRITE,
+            rqst->lba,
+            rqst->lun};
 
     if (spdkDev->write(ioTask) != true) {
         _rqstClb(rqst, StatusCode::UNKNOWN_ERROR);
