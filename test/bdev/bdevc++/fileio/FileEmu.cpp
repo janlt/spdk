@@ -79,7 +79,7 @@ int FileEmu::adjustPos(int64_t delta) {
     if (delta < 0 && static_cast<uint64_t>(abs(delta)) > pos.pos)
         return -1;
     cout << "adjustPos ENTER p.pos " << pos.pos << " delta " << delta <<
-            " p.posLba " << pos.posLba << " p.posLun " << pos.posLun << endl;
+            " p.posLba " << pos.posLba << " p.posLun " << static_cast<uint32_t>(pos.posLun) << endl;
     pos.pos += delta;
     int64_t deltaLbas;
     if (delta > 0)
@@ -96,7 +96,7 @@ int FileEmu::adjustPos(int64_t delta) {
         pos.posLba += deltaLbas;
     }
     cout << "adjustPos EXIT p.pos " << pos.pos << " delta " << delta <<
-            " p.posLba " << pos.posLba << " p.posLun " << pos.posLun << endl;
+            " p.posLba " << pos.posLba << " p.posLun " << static_cast<uint32_t>(pos.posLun) << endl;
     return 0;
 }
 

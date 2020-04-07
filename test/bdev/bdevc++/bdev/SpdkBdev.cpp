@@ -234,12 +234,13 @@ bool SpdkBdev::doRead(DeviceTask *task) {
     SpdkBdev::readComplete(reinterpret_cast<struct spdk_bdev_io *>(task->buff),
                            true, task);
 #else
+    uint64_t numBlks = !task->size%task->blockSize ? task->size/task->blockSize : task->size/task->blockSize + 1;
     //std::cout << "Read dataSize " << task->rqst->dataSize <<
-        //" blockSize " << task->blockSize << " lba " << task->lba << std::endl;
+        //" blockSize " << task->blockSize << " lba " << task->lba << " nblks " << numBlks << std::endl;
     int r_rc = spdk_bdev_read_blocks(
         bdev->spBdevCtx.bdev_desc, bdev->spBdevCtx.io_channel,
-        task->buff->getSpdkDmaBuf(), task->blockSize * task->lba,
-        task->blockSize, SpdkBdev::readComplete, task);
+        task->buff->getSpdkDmaBuf(), task->lba,
+        numBlks, SpdkBdev::readComplete, task);
 #endif
     bdev->stats.outstanding_io_cnt++;
 
@@ -301,12 +302,13 @@ bool SpdkBdev::doWrite(DeviceTask *task) {
     SpdkBdev::writeComplete(reinterpret_cast<struct spdk_bdev_io *>(task->buff),
                             true, task);
 #else
+    uint64_t numBlks = !task->size%task->blockSize ? task->size/task->blockSize : task->size/task->blockSize + 1;
     //std::cout << "Write dataSize " << task->rqst->dataSize <<
-        //" blockSize " << task->blockSize << " lba " << task->lba << std::endl;
+        //" blockSize " << task->blockSize << " lba " << task->lba << " nblks " << numBlks << std::endl;
     int w_rc = spdk_bdev_write_blocks(
         bdev->spBdevCtx.bdev_desc, bdev->spBdevCtx.io_channel,
-        task->buff->getSpdkDmaBuf(), task->blockSize * task->lba,
-        task->blockSize, SpdkBdev::writeComplete, task);
+        task->buff->getSpdkDmaBuf(), task->lba,
+        numBlks, SpdkBdev::writeComplete, task);
 #endif
     bdev->stats.outstanding_io_cnt++;
 

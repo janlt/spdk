@@ -26,6 +26,7 @@ struct FileGeom {
     uint8_t startLun = 0;
     uint8_t numLuns = 0;
     uint64_t optLbaSize = 4096;
+    uint64_t blocksPerOptIo = 8;
 };
 
 struct FilePos {

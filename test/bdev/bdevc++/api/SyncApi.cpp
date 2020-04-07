@@ -86,7 +86,7 @@ int SyncApi::getIoPos(int desc, uint64_t &lba, uint8_t &lun) {
     FileEmu *femu = map.getFile(desc);
     if (!femu)
         return -1;
-    lba = femu->pos.posLba + femu->geom.startLba;
+    lba = (femu->pos.posLba + femu->geom.startLba)*femu->geom.blocksPerOptIo;
     lun = femu->pos.posLun;
     return 0;
 }
