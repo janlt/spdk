@@ -129,4 +129,21 @@ Api::~Api() {
     }
 }
 
+bool Api::QuiesceIO(bool force) {
+    spc->getBdev()->IOQuiesce();
+
+    int num_tries = 0;
+    while (spc->getBdev()->isIOQuiescent() == false) {
+        ::sleep(1);
+        if ( force == true && num_tries++ > 20 ) {
+            spc->getBdev()->IOAbort();
+            break;
+        }
+    }
+
+    return spio->getBdev()->isIOQuiescent();
+
+    return true;
+}
+
 } // namespace BdevCpp

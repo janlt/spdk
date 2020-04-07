@@ -78,7 +78,10 @@ int FileEmu::lseek(off_t off, int whence) {
 int FileEmu::adjustPos(int64_t delta) {
     if (delta < 0 && static_cast<uint64_t>(abs(delta)) > pos.pos)
         return -1;
-    uint64_t deltaLbas;
+    cout << "adjustPos ENTER p.pos " << pos.pos << " delta " << delta <<
+            " p.posLba " << pos.posLba << " p.posLun " << pos.posLun << endl;
+    pos.pos += delta;
+    int64_t deltaLbas;
     if (delta > 0)
         deltaLbas = delta/geom.optLbaSize + 1;
     else if (delta < 0)
@@ -92,6 +95,8 @@ int FileEmu::adjustPos(int64_t delta) {
     } else {
         pos.posLba += deltaLbas;
     }
+    cout << "adjustPos EXIT p.pos " << pos.pos << " delta " << delta <<
+            " p.posLba " << pos.posLba << " p.posLun " << pos.posLun << endl;
     return 0;
 }
 

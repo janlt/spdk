@@ -29,6 +29,7 @@ class Api {
     AsyncApi *getAsyncApi() {
         return Api::asyncApi;
     }
+    bool QuiesceIO(bool force);
 
   private:
     static SyncApi *syncApi;

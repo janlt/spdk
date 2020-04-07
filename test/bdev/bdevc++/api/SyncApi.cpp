@@ -102,7 +102,7 @@ int SyncApi::read(int desc, char *buffer, size_t bufferSize) {
         return -1;
 
     IoRqst *getRqst = IoRqst::readPool.get();
-    getRqst->finalizeRead(nullptr, 0,
+    getRqst->finalizeRead(nullptr, bufferSize,
                          [&mtx, &cv, &ready, buffer, bufferSize](
                              Status status, const char *data, size_t dataSize) {
                              unique_lock<mutex> lck(mtx);

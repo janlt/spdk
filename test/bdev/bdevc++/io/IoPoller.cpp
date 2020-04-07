@@ -55,8 +55,8 @@ void IoPoller::_processRead(IoRqst *rqst) {
 
     DeviceTask *ioTask =
         new (rqst->taskBuffer) DeviceTask{0,
-            spdkDev->getOptimalSize(rqst->dataSize),
-            0,
+            rqst->dataSize,
+            spdkDev->getBlockSize(),
             0,
             rqst->clb,
             spdkDev,
@@ -80,7 +80,6 @@ void IoPoller::_processWrite(IoRqst *rqst) {
     }
 
     SpdkDevice *spdkDev = getBdev();
-    auto valSizeAlign = spdkDev->getAlignedSize(rqst->dataSize);
 
     if (rqst->dataSize == 0) {
         _rqstClb(rqst, StatusCode::OK);
@@ -90,8 +89,8 @@ void IoPoller::_processWrite(IoRqst *rqst) {
 
     ioTask = new (rqst->taskBuffer)
         DeviceTask{0,
-            spdkDev->getOptimalSize(rqst->dataSize),
-            spdkDev->getSizeInBlk(valSizeAlign),
+            rqst->dataSize,
+            spdkDev->getBlockSize(),
             new (rqst->devAddrBuf) DeviceAddr,
             rqst->clb,
             spdkDev,

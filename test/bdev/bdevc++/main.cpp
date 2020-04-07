@@ -79,7 +79,7 @@ static int SyncIoTest(BdevCpp::SyncApi *api, const char *file_name) {
     }
 
     for (int i = 0 ; i < 10 ; i++) {
-        size_t io_size = 512*(2*2 + 1);
+        size_t io_size = 512*(2*i + 1);
         ::memset(buf, 'a' + i, io_size);
         rc = api->write(fd, buf, io_size);
         if (rc < 0) {
@@ -95,7 +95,7 @@ static int SyncIoTest(BdevCpp::SyncApi *api, const char *file_name) {
     }
 
     for (int i = 0 ; i < 10 ; i++) {
-        size_t io_size = 512*(2*2 + 1);
+        size_t io_size = 512*(2*i + 1);
         ::memset(cmp_buf, 'a' + i, io_size);
         rc = api->read(fd, buf, io_size);
         if (rc < 0) {
@@ -163,5 +163,6 @@ int main(int argc, char **argv) {
     rc = AsyncIoTest(asyncApi, async_file_name);
     cout << "AsyncIoTest rc: " << rc << endl;
 
+    api.QuiesceIO(true);
     return rc;
 }
