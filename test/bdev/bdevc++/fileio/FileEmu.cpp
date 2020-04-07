@@ -78,7 +78,13 @@ int FileEmu::lseek(off_t off, int whence) {
 int FileEmu::adjustPos(int64_t delta) {
     if (delta < 0 && static_cast<uint64_t>(abs(delta)) > pos.pos)
         return -1;
-    uint64_t deltaLbas = delta/geom.optLbaSize + 1;
+    uint64_t deltaLbas;
+    if (delta > 0)
+        deltaLbas = delta/geom.optLbaSize + 1;
+    else if (delta < 0)
+        deltaLbas = delta/geom.optLbaSize - 1;
+    else
+        deltaLbas = 0;
     if (pos.posLba + deltaLbas > geom.endLba) {
         pos.posLun++;
         pos.posLun %= geom.numLuns;
@@ -150,6 +156,9 @@ int FileMap::putFile(FileEmu *fileEmu, uint64_t numBlk, uint32_t numLun) {
     fileEmu->geom.startLun = startLun%numLun;
     startLun++;
     fileEmu->fileSlot = freeSlot;
+
+    fileEmu->resetPos();
+    fileEmu->lseek(0, SEEK_SET);
 
     files[fileEmu->desc].reset(fileEmu);
 

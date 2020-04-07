@@ -123,6 +123,7 @@ int SyncApi::read(int desc, char *buffer, size_t bufferSize) {
         if (ready == false)
             return -1;
     }
+    ApiBase::lseek(desc, bufferSize, SEEK_CUR);
 
     return bufferSize;
 }
@@ -158,6 +159,7 @@ int SyncApi::write(int desc, const char *data, size_t dataSize) {
         if (ready == false)
             return -1;
     }
+    ApiBase::lseek(desc, dataSize, SEEK_CUR);
 
     return dataSize;
 }

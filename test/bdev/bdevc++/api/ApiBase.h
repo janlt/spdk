@@ -18,9 +18,12 @@
 
 namespace BdevCpp {
 
+class FileEmu;
+
 class ApiBase {
   public:
-    ApiBase() = default;
+    ApiBase()
+        : storageGeom(0), femu(0) {}
     virtual ~ApiBase() = default;
 
   protected:
@@ -34,6 +37,7 @@ class ApiBase {
     virtual off_t lseek(int fd, off_t offset, int whence) = 0;
 
     BdevGeom *storageGeom;
+    FileEmu *femu;
 };
 
 } // namespace BdevCpp

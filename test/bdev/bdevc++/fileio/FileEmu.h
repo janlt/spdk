@@ -42,6 +42,11 @@ class FileEmu {
     int lseek(off_t off, int whence);
     int adjustPos(int64_t delta);
     void setGeom(uint64_t _startLba, uint64_t _endLba, uint8_t _startLun, uint8_t _numLuns);
+    void resetPos() {
+        pos.pos = 0;
+        pos.posLba = 0;
+        pos.posLun = 0;
+    }
 
     std::string name;
     int flags;
