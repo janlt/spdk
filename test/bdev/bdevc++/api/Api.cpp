@@ -91,7 +91,7 @@ Api::Api(const Options &options)
         spc->waitReady(); // synchronize until SpdkCore is done initializing SPDK framework
     }
 
-    storageGeom = spc->getBdev()->getBdevGeom();
+    spc->getBdev()->getBdevGeom(storageGeom);
 
     unique_lock<Lock> r_lock(instanceMutex);
 

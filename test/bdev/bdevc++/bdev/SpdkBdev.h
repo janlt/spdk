@@ -159,7 +159,7 @@ class SpdkBdev : public SpdkDevice {
     virtual void setRunning(int running) { isRunning = running; }
     virtual bool IsRunning(int running) { return isRunning; }
 
-    virtual BdevGeom getBdevGeom();
+    virtual void getBdevGeom(BdevGeom &geom);
 
     SpdkIoEngine *ioEngine;
     std::thread *ioEngineThread;

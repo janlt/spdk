@@ -56,6 +56,6 @@ void SpdkRAID0Bdev::setMaxQueued(uint32_t io_cache_size, uint32_t blk_size) {
     IoBytesMaxQueued = io_cache_size * 128;
 }
 
-BdevGeom SpdkRAID0Bdev::getBdevGeom() { return BdevGeom(); }
+void SpdkRAID0Bdev::getBdevGeom(BdevGeom &geom) { return; }
 
 } // namespace BdevCpp

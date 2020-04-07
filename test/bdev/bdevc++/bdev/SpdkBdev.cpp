@@ -560,13 +560,10 @@ void SpdkBdev::ioEngineThreadMain() {
     spdk_poller_unregister(&spdk_io_poller);
 }
 
-BdevGeom SpdkBdev::getBdevGeom() {
-    BdevGeom geom;
+void SpdkBdev::getBdevGeom(BdevGeom &geom) {
     geom.dev_num = 1;
     geom.type = SpdkDeviceClass::BDEV;
     geom.blk_num[0] = spBdevCtx.blk_num;
-
-    return geom;
 }
 
 void SpdkBdev::setMaxQueued(uint32_t io_cache_size, uint32_t blk_size) {}

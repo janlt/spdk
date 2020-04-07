@@ -158,7 +158,7 @@ class SpdkDevice {
     virtual void setRunning(int running) = 0;
     virtual bool IsRunning(int running) = 0;
 
-    virtual BdevGeom getBdevGeom() = 0;
+    virtual void getBdevGeom(BdevGeom &geom) = 0;
 
     uint64_t blkNumForLba = 0;
     SpdkBdevCtx spBdevCtx;

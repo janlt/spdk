@@ -157,14 +157,11 @@ void SpdkJBODBdev::IOAbort() {
     }
 }
 
-BdevGeom SpdkJBODBdev::getBdevGeom() {
-    BdevGeom geom;
+void SpdkJBODBdev::getBdevGeom(BdevGeom &geom) {
     geom.dev_num = numDevices;
     geom.type = SpdkDeviceClass::JBOD;
     for (uint32_t i = 0; i < numDevices; i++)
         geom.blk_num[i] = devices[i].bdev->spBdevCtx.blk_num;
-
-    return geom;
 }
 
 } // namespace BdevCpp
