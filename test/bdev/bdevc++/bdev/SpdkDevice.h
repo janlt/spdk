@@ -99,6 +99,25 @@ struct BdevGeom {
     IoDevType type;
     uint32_t dev_num;
     uint64_t blk_num[maxDevices];
+    BdevGeom(const BdevGeom &r)
+        : type(r.type), dev_num(r.dev_num) {
+        for (uint32_t i = 0 ; i < maxDevices ; i++)
+            blk_num[i] = r.blk_num[i];
+    }
+    BdevGeom &operator = (const BdevGeom &r) {
+        if (&r == this)
+            return *this;
+        type = r.type;
+        dev_num = r.dev_num;
+        for (uint32_t i = 0 ; i < maxDevices ; i++)
+            blk_num[i] = r.blk_num[i];
+        return *this;
+    }
+    BdevGeom()
+        : type(BDEV), dev_num(0) {
+        for (uint32_t i = 0 ; i < maxDevices ; i++)
+            blk_num[i] = 0;
+    }
 };
 
 /*
