@@ -15,7 +15,7 @@ SO_VER := 1
 SO_MINOR := 0
 SO_SUFFIX := $(SO_VER).$(SO_MINOR)
 
-CXX_SRCS = SyncApi.cpp AsyncApi.cpp ApiBase.cpp Api.cpp
+CXX_SRCS = SyncApi.cpp AsyncApi.cpp ApiBase.cpp Api.cpp FutureBase.cpp Future.cpp
 LIBNAME = bdevc++api
 
 include $(SPDK_ROOT_DIR)/mk/spdk.lib.mk

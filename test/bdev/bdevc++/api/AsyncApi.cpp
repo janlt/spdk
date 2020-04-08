@@ -56,6 +56,8 @@
 #include "SpdkIoBuf.h"
 #include "SpdkCore.h"
 
+#include "FutureBase.h"
+#include "Future.h"
 #include "ApiBase.h"
 #include "AsyncApi.h"
 #include "FileEmu.h"
@@ -89,14 +91,22 @@ int AsyncApi::getIoPos(int desc, uint64_t &lba, uint8_t &lun) {
 }
 
 int AsyncApi::read(int desc, char *buffer, size_t bufferSize) {
-    return 0;
+    return -1;
 }
 
 int AsyncApi::write(int desc, const char *data, size_t dataSize) {
-    return 0;
+    return -1;
 }
 
 int AsyncApi::fsync(int desc) {
+    return 0;
+}
+
+FutureBase *AsyncApi::read(int desc, uint64_t pos, char *buffer, size_t bufferSize) {
+    return 0;
+}
+
+FutureBase *AsyncApi::write(int desc, uint64_t pos, const char *data, size_t dataSize) {
     return 0;
 }
 

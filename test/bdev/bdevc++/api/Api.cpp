@@ -55,6 +55,8 @@
 #include "SpdkIoBuf.h"
 #include "SpdkCore.h"
 
+#include "FutureBase.h"
+#include "Future.h"
 #include "ApiBase.h"
 #include "SyncApi.h"
 #include "AsyncApi.h"

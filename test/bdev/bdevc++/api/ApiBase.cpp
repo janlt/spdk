@@ -58,6 +58,7 @@
 #include "SpdkIoBuf.h"
 #include "SpdkCore.h"
 
+#include "FutureBase.h"
 #include "ApiBase.h"
 #include "FileEmu.h"
 

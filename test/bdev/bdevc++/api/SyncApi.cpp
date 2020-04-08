@@ -56,6 +56,8 @@
 #include "SpdkIoBuf.h"
 #include "SpdkCore.h"
 
+#include "FutureBase.h"
+#include "Future.h"
 #include "ApiBase.h"
 #include "SyncApi.h"
 #include "FileEmu.h"
@@ -168,4 +170,13 @@ int SyncApi::write(int desc, const char *data, size_t dataSize) {
 int SyncApi::fsync(int desc) {
     return 0;
 }
+
+FutureBase *SyncApi::read(int desc, uint64_t pos, char *buffer, size_t bufferSize) {
+    return 0;
+}
+
+FutureBase *SyncApi::write(int desc, uint64_t pos, const char *data, size_t dataSize) {
+    return 0;
+}
+
 } // namespace BdevCpp

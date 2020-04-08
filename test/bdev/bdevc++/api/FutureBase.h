@@ -18,26 +18,25 @@
 
 namespace BdevCpp {
 
-class SyncApi : public ApiBase {
-  friend class Api;
-    SyncApi(IoPoller *_spio);
-    virtual ~SyncApi();
+class FutureBase {
+friend class Api;
+friend class AsyncApi;
+friend class ReadFuture;
+friend class WriteFuture;
 
-    IoPoller *spio;
+  private:
+    FutureBase();
+    virtual ~FutureBase();
 
   protected:
-    int getIoPos(int desc, uint64_t &lba, uint8_t &lun);
+    virtual int get(BdevCpp::Status status, const char *data = 0, size_t dataSize = 0) = 0;
+    virtual char *getData() = 0;
+    virtual size_t getDataSize() = 0;
 
-  public:
-    int open(const char *name, int flags, mode_t mode = S_IRUSR | S_IWUSR);
-    int close(int desc);
-    int read(int desc, char *buffer, size_t bufferSize);
-    int write(int desc, const char *data, size_t dataSize);
-    off_t lseek(int fd, off_t offset, int whence);
-    int fsync(int desc);
-
-    FutureBase *read(int desc, uint64_t pos, char *buffer, size_t bufferSize);
-    FutureBase *write(int desc, uint64_t pos, const char *data, size_t dataSize);
+  private:
+    std::mutex mtx;
+    std::condition_variable cv;
+    int opStatus;
 };
 
 } // namespace BdevCpp
