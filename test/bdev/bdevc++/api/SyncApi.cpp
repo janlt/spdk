@@ -164,4 +164,8 @@ int SyncApi::write(int desc, const char *data, size_t dataSize) {
 
     return dataSize;
 }
+
+int SyncApi::fsync(int desc) {
+    return 0;
+}
 } // namespace BdevCpp

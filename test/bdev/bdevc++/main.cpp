@@ -100,48 +100,53 @@ static int SyncIoTest(BdevCpp::SyncApi *api,
             size_t io_size = 512*(2*(i%20) + 1);
             ::memset(buf, 'a' + i%20, io_size);
             rc = !mode ? api->write(fd, buf, io_size) : ::write(fd, buf, io_size);
-            if (mode)
-                rc = ::fsync(fd);
             if (rc < 0) {
-                cerr << "write sync failed rc: " << rc << " errno: " << errno << endl;
+                cerr << "write failed rc: " << rc << " errno: " << errno << endl;
                 break;
             }
+
+            rc = !mode ? api->fsync(fd) : ::fsync(fd);
+            if (rc < 0) {
+                cerr << "fsync failed rc: " << rc << " errno: " << errno << endl;
+                break;
+            }
+
             write_ios++;
             bytes_written += io_size;
         }
 
         if (check) {
-        rc = !mode ? api->lseek(fd, 0, SEEK_SET) : ::lseek(fd, 0, SEEK_SET);
-        if (rc < 0) {
-            cerr << "week sync failed rc: " << rc << " errno: " << errno << endl;
-            return rc;
-        }
-
-        for (int i = 0 ; i < loop_count ; i++) {
-            size_t io_size = 512*(2*(i%20) + 1);
-            ::memset(cmp_buf, 'a' + i%20, io_size);
-
-            rc = !mode ? api->read(fd, buf, io_size) : ::read(fd, buf, io_size);
+            rc = !mode ? api->lseek(fd, 0, SEEK_SET) : ::lseek(fd, 0, SEEK_SET);
             if (rc < 0) {
-                cerr << "read sync failed rc: " << rc << " errno: " << errno << endl;
-                rc = -1;
-                break;
+                cerr << "lseek failed rc: " << rc << " errno: " << errno << endl;
+                return rc;
             }
-            read_ios++;
-            bytes_read += io_size;
 
-            if (memcmp(buf, cmp_buf, io_size)) {
-                cerr << "Corrupted data after read i: " << i << " io_size: " << io_size << endl;
-                rc = -1;
-                break;
+            for (int i = 0 ; i < loop_count ; i++) {
+                size_t io_size = 512*(2*(i%20) + 1);
+                ::memset(cmp_buf, 'a' + i%20, io_size);
+
+                rc = !mode ? api->read(fd, buf, io_size) : ::read(fd, buf, io_size);
+                if (rc < 0) {
+                    cerr << "read failed rc: " << rc << " errno: " << errno << endl;
+                    rc = -1;
+                    break;
+                }
+                read_ios++;
+                bytes_read += io_size;
+
+                if (memcmp(buf, cmp_buf, io_size)) {
+                    cerr << "Corrupted data after read i: " << i << " io_size: " << io_size << endl;
+                    rc = -1;
+                    break;
+                }
             }
-        }
 
-        rc = !mode ? api->lseek(fd, 0, SEEK_SET) : ::lseek(fd, 0, SEEK_SET);
-        if (rc < 0) {
-            cerr << "week sync failed rc: " << rc << " errno: " << errno << endl;
-            return rc;
-        }
+            rc = !mode ? api->lseek(fd, 0, SEEK_SET) : ::lseek(fd, 0, SEEK_SET);
+            if (rc < 0) {
+                cerr << "lseek failed rc: " << rc << " errno: " << errno << endl;
+                return rc;
+            }
         }
     }
 

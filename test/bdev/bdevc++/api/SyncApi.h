@@ -34,6 +34,7 @@ class SyncApi : public ApiBase {
     int read(int desc, char *buffer, size_t bufferSize);
     int write(int desc, const char *data, size_t dataSize);
     off_t lseek(int fd, off_t offset, int whence);
+    int fsync(int desc);
 };
 
 } // namespace BdevCpp

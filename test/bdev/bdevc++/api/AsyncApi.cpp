@@ -96,4 +96,8 @@ int AsyncApi::write(int desc, const char *data, size_t dataSize) {
     return 0;
 }
 
+int AsyncApi::fsync(int desc) {
+    return 0;
+}
+
 } // namespace BdevCpp
