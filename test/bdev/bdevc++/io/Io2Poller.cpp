@@ -77,10 +77,10 @@ void Io2Poller::process() {
 void Io2Poller::_processRead(DeviceTask *task) {
     SpdkBdev *bdev = reinterpret_cast<SpdkBdev *>(task->bdev);
 
-    if (task->result) {
+    if (task->result == true) {
         if (task->clb)
             task->clb(StatusCode::OK,
-                      task->buff->getSpdkDmaBuf(), task->rqst->dataSize);
+                      task->buff->getSpdkDmaBuf(), task->size);
     } else {
         if (task->clb)
             task->clb(StatusCode::UNKNOWN_ERROR, nullptr, 0);
@@ -99,7 +99,7 @@ void Io2Poller::_processWrite(DeviceTask *task) {
 
     if (task->result == true) {
         if (task->clb)
-            task->clb(StatusCode::OK, nullptr, 0);
+            task->clb(StatusCode::OK, nullptr, task->size);
     } else {
         if (task->clb)
             task->clb(StatusCode::UNKNOWN_ERROR, nullptr, 0);

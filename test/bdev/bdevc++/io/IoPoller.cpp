@@ -51,7 +51,18 @@ IoPoller::~IoPoller() {
 }
 
 void IoPoller::_processRead(IoRqst *rqst) {
+    if (rqst == nullptr) {
+        _rqstClb(rqst, StatusCode::UNKNOWN_ERROR);
+        return;
+    }
+
     SpdkDevice *spdkDev = getBdev();
+
+    if (!rqst->dataSize) {
+        _rqstClb(rqst, StatusCode::OK);
+        IoRqst::writePool.put(rqst);
+        return;
+    }
 
     DeviceTask *ioTask =
         new (rqst->taskBuffer) DeviceTask{0,
@@ -72,8 +83,6 @@ void IoPoller::_processRead(IoRqst *rqst) {
 }
 
 void IoPoller::_processWrite(IoRqst *rqst) {
-    DeviceTask *ioTask = nullptr;
-
     if (rqst == nullptr) {
         _rqstClb(rqst, StatusCode::UNKNOWN_ERROR);
         return;
@@ -81,13 +90,13 @@ void IoPoller::_processWrite(IoRqst *rqst) {
 
     SpdkDevice *spdkDev = getBdev();
 
-    if (rqst->dataSize == 0) {
+    if (!rqst->dataSize || !rqst->data) {
         _rqstClb(rqst, StatusCode::OK);
         IoRqst::writePool.put(rqst);
         return;
     }
 
-    ioTask = new (rqst->taskBuffer)
+    DeviceTask *ioTask = new (rqst->taskBuffer)
         DeviceTask{0,
             rqst->dataSize,
             spdkDev->getBlockSize(),

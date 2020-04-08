@@ -75,7 +75,7 @@ class IoPoller : public Poller<IoRqst> {
 
     inline void _rqstClb(const IoRqst *rqst, StatusCode status) {
         if (rqst->clb)
-            rqst->clb(status, nullptr, 0);
+            rqst->clb(status, nullptr, rqst->dataSize);
     }
 };
 

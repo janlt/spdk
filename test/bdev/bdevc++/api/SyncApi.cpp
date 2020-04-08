@@ -107,12 +107,12 @@ int SyncApi::read(int desc, char *buffer, size_t bufferSize) {
                              Status status, const char *data, size_t dataSize) {
                              unique_lock<mutex> lck(mtx);
                              memcpy(buffer, data, dataSize);
-                             ready = true;
+                             ready = status.ok();
                              cv.notify_all();
                          },
                          lba, lun);
 
-    if (!spio->enqueue(getRqst)) {
+    if (spio->enqueue(getRqst) == false) {
         IoRqst::readPool.put(getRqst);
         return -1;
     }
@@ -143,12 +143,12 @@ int SyncApi::write(int desc, const char *data, size_t dataSize) {
         [&mtx, &cv, &ready](Status status,
                             const char *data, size_t dataSize) {
             unique_lock<mutex> lck(mtx);
-            ready = true;
+            ready = status.ok();
             cv.notify_all();
         },
         lba, lun);
 
-    if (!spio->enqueue(writeRqst)) {
+    if (spio->enqueue(writeRqst) == false) {
         IoRqst::writePool.put(writeRqst);
         return -1;
     }
