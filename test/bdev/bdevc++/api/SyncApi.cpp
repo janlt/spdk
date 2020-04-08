@@ -106,8 +106,9 @@ int SyncApi::read(int desc, char *buffer, size_t bufferSize) {
                          [&mtx, &cv, &ready, buffer, bufferSize](
                              Status status, const char *data, size_t dataSize) {
                              unique_lock<mutex> lck(mtx);
-                             memcpy(buffer, data, dataSize);
                              ready = status.ok();
+                             if (ready == true)
+                                 memcpy(buffer, data, dataSize);
                              cv.notify_all();
                          },
                          lba, lun);

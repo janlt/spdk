@@ -67,7 +67,15 @@ static int AsyncOpenCloseTest(BdevCpp::AsyncApi *api, const char *file_name) {
     return rc;
 }
 
-static int SyncIoTest(BdevCpp::SyncApi *api, const char *file_name, int loop_count) {
+static void printTimeNow(const char *msg) {
+    char time_buf[128];
+    time_t now = time(0);
+    strftime(time_buf, sizeof(time_buf), "%Y-%m-%d %H:%M:%S.000", localtime(&now));
+    cout << msg << " " << time_buf << endl;
+}
+
+static int SyncIoTest(BdevCpp::SyncApi *api,
+        const char *file_name, int loop_count, int out_loop_count) {
     int rc = 0;
     char buf[25000];
     char cmp_buf[25000];
@@ -78,42 +86,66 @@ static int SyncIoTest(BdevCpp::SyncApi *api, const char *file_name, int loop_cou
         return -1;
     }
 
-    for (int i = 0 ; i < loop_count ; i++) {
-        size_t io_size = 512*(2*(i%20) + 1);
-        ::memset(buf, 'a' + i%20, io_size);
-        rc = api->write(fd, buf, io_size);
+    printTimeNow("Start test ");
+
+    uint64_t bytes_written = 0;
+    uint64_t bytes_read = 0;
+    uint64_t write_ios = 0;
+    uint64_t read_ios = 0;
+
+    for (int j = 0 ; j < out_loop_count ; j++) {
+        for (int i = 0 ; i < loop_count ; i++) {
+            size_t io_size = 512*(2*(i%20) + 1);
+            ::memset(buf, 'a' + i%20, io_size);
+            rc = api->write(fd, buf, io_size);
+            if (rc < 0) {
+                cerr << "write sync failed rc: " << rc << " errno: " << errno << endl;
+                break;
+            }
+            write_ios++;
+            bytes_written += io_size;
+        }
+
+        rc = api->lseek(fd, 0, SEEK_SET);
         if (rc < 0) {
-            cerr << "write sync failed rc: " << rc << " errno: " << errno << endl;
-            break;
+            cerr << "week sync failed rc: " << rc << " errno: " << errno << endl;
+            return rc;
+        }
+
+        for (int i = 0 ; i < loop_count ; i++) {
+            size_t io_size = 512*(2*(i%20) + 1);
+            ::memset(cmp_buf, 'a' + i%20, io_size);
+            rc = api->read(fd, buf, io_size);
+            if (rc < 0) {
+                cerr << "read sync failed rc: " << rc << " errno: " << errno << endl;
+                rc = -1;
+                break;
+            }
+            read_ios++;
+            bytes_read += io_size;
+
+            if (memcmp(buf, cmp_buf, io_size)) {
+                cerr << "Corrupted data after read i: " << i << " io_size: " << io_size << endl;
+                rc = -1;
+                break;
+            }
+        }
+
+        rc = api->lseek(fd, 0, SEEK_SET);
+        if (rc < 0) {
+            cerr << "week sync failed rc: " << rc << " errno: " << errno << endl;
+            return rc;
         }
     }
 
-    rc = api->lseek(fd, 0, SEEK_SET);
-    if (rc < 0) {
-        cerr << "week sync failed rc: " << rc << " errno: " << errno << endl;
-        return rc;
-    }
-
-    for (int i = 0 ; i < loop_count ; i++) {
-        size_t io_size = 512*(2*(i%20) + 1);
-        ::memset(cmp_buf, 'a' + i%20, io_size);
-        rc = api->read(fd, buf, io_size);
-        if (rc < 0) {
-            cerr << "read sync failed rc: " << rc << " errno: " << errno << endl;
-            rc = -1;
-            break;
-        }
-        if (memcmp(buf, cmp_buf, io_size)) {
-            cerr << "Corrupted data after read i: " << i << " io_size: " << io_size << endl;
-            rc = -1;
-            break;
-        }
-    }
+    printTimeNow("End test ");
+    cout << "bytes_written " << bytes_written << " bytes_read " << bytes_read <<
+            " write_ios " << write_ios << " read_ios " << read_ios << endl;
 
     return rc;
 }
 
-static int AsyncIoTest(BdevCpp::AsyncApi *aApi, const char *file_name, int loop_count) {
+static int AsyncIoTest(BdevCpp::AsyncApi *aApi, const char *file_name, int loop_count, int out_loop_count) {
     return 0;
 }
 
@@ -158,13 +190,16 @@ int main(int argc, char **argv) {
         return rc;
 
     int loop_count = 10;
+    int out_loop_count = 10;
     if (argc > 3)
         loop_count = atoi(argv[3]);
+    if (argc > 4)
+        out_loop_count = atoi(argv[3]);
 
-    rc = SyncIoTest(syncApi, sync_file_name, loop_count);
+    rc = SyncIoTest(syncApi, sync_file_name, loop_count, out_loop_count);
     cout << "SyncIoTest rc: " << rc << endl;
 
-    rc = AsyncIoTest(asyncApi, async_file_name, loop_count);
+    rc = AsyncIoTest(asyncApi, async_file_name, loop_count, out_loop_count);
     cout << "AsyncIoTest rc: " << rc << endl;
 
     api.QuiesceIO(true);

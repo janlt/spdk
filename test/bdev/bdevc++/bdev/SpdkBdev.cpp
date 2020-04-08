@@ -87,14 +87,21 @@ size_t SpdkBdev::getCoreNum() {
 }
 
 void SpdkBdev::IOQuiesce() {
-    io2->Quiesce();
+    if (io2)
+        io2->Quiesce();
     _IoState = SpdkBdev::IOState::BDEV_IO_QUIESCING;
 }
 
 bool SpdkBdev::isIOQuiescent() {
-    return ((_IoState == SpdkBdev::IOState::BDEV_IO_QUIESCENT ||
+    if (io2)
+        return ((_IoState == SpdkBdev::IOState::BDEV_IO_QUIESCENT ||
              _IoState == SpdkBdev::IOState::BDEV_IO_ABORTED) &&
-            io2->isQuiescent() == true)
+             io2->isQuiescent() == true)
+               ? true
+               : false;
+    else
+        return (_IoState == SpdkBdev::IOState::BDEV_IO_QUIESCENT ||
+              _IoState == SpdkBdev::IOState::BDEV_IO_ABORTED)
                ? true
                : false;
 }
@@ -124,7 +131,18 @@ void SpdkBdev::writeComplete(struct spdk_bdev_io *bdev_io, bool success,
     task->result = success;
     if (bdev->statsEnabled == true && success == true)
         bdev->stats.printWritePer(std::cout, bdev->spBdevCtx.bdev_addr);
-    bdev->io2->enqueue(task);
+
+    if (task->result == true) {
+        if (task->clb)
+            task->clb(StatusCode::OK, nullptr, task->size);
+    } else {
+        if (task->clb)
+            task->clb(StatusCode::UNKNOWN_ERROR, nullptr, 0);
+    }
+
+    IoRqst::writePool.put(task->rqst);
+
+    //bdev->io2->enqueue(task);
 }
 
 /*
@@ -148,7 +166,21 @@ void SpdkBdev::readComplete(struct spdk_bdev_io *bdev_io, bool success,
     task->result = success;
     if (bdev->statsEnabled == true && success == true)
         bdev->stats.printReadPer(std::cout, bdev->spBdevCtx.bdev_addr);
-    bdev->io2->enqueue(task);
+
+    if (task->result == true) {
+        if (task->clb)
+            task->clb(StatusCode::OK,
+                      task->buff->getSpdkDmaBuf(), task->size);
+    } else {
+        if (task->clb)
+            task->clb(StatusCode::UNKNOWN_ERROR, nullptr, 0);
+    }
+
+    bdev->ioPoolMgr->putIoReadBuf(task->buff);
+    bdev->ioBufsInUse--;
+    IoRqst::readPool.put(task->rqst);
+
+    //bdev->io2->enqueue(task);
 }
 
 /*
@@ -445,6 +477,7 @@ bool SpdkBdev::init(const SpdkConf &conf) {
     /*
      * Set up finalizer
      */
+#if 0
     io2 = new Io2Poller();
     io2Thread = new std::thread(&SpdkBdev::finilizerThreadMain, this);
     cpu_set_t cpuset;
@@ -460,7 +493,7 @@ bool SpdkBdev::init(const SpdkConf &conf) {
         IOP_DEBUG("Cannot set affinity on CPU core [" +
                   std::to_string(cpuCoreFin) + "] for Io2r");
     }
-
+#endif
     /*
      * Set up ioEngine
      */
@@ -470,7 +503,7 @@ bool SpdkBdev::init(const SpdkConf &conf) {
     CPU_ZERO(&cpuset1);
     CPU_SET(cpuCoreIoEng, &cpuset1);
 
-    set_result = pthread_setaffinity_np(ioEngineThread->native_handle(),
+    int set_result = pthread_setaffinity_np(ioEngineThread->native_handle(),
                                         sizeof(cpu_set_t), &cpuset1);
     if (!set_result) {
         IOP_DEBUG("SpdkCore thread affinity set on CPU core [" +
