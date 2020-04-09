@@ -21,13 +21,15 @@ namespace BdevCpp {
 class ReadFuture: public FutureBase {
 friend class Api;
 friend class AsyncApi;
+friend class ClassAlloc<ReadFuture>;
 
   private:
     ReadFuture(char *_buffer = 0, size_t _bufferSize = 0);
     virtual ~ReadFuture();
 
   public:
-    int get(Status status, const char *data, size_t _dataSize);
+    int get(char *&data, size_t &_dataSize);
+    void signal(Status status, const char *data, size_t _dataSize);
     char *getData() {
         return buffer;
     }
@@ -38,18 +40,22 @@ friend class AsyncApi;
   private:
     char *buffer;
     size_t bufferSize;
+
+    static BdevCpp::GeneralPool<ReadFuture, BdevCpp::ClassAlloc<ReadFuture>> readFuturePool;
 };
 
 class WriteFuture: public FutureBase {
 friend class Api;
 friend class AsyncApi;
+friend class ClassAlloc<WriteFuture>;
 
   private:
-    WriteFuture(size_t _dataSize);
+    WriteFuture(size_t _dataSize = 0);
     virtual ~WriteFuture();
 
   public:
-    int get(Status status, const char *data, size_t _dataSize);
+    int get(char *&data, size_t &_dataSize);
+    void signal(Status status, const char *data, size_t _dataSize);
     char *getData() {
         return 0;
     }
@@ -59,6 +65,8 @@ friend class AsyncApi;
 
   private:
     size_t dataSize;
+
+    static BdevCpp::GeneralPool<WriteFuture, BdevCpp::ClassAlloc<WriteFuture>> writeFuturePool;
 };
 
 } // namespace BdevCpp

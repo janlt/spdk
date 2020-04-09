@@ -26,6 +26,8 @@
 #include <chrono>
 #include <condition_variable>
 
+#include "ClassAlloc.h"
+#include "GeneralPool.h"
 #include "Status.h"
 
 #include "FutureBase.h"
@@ -35,29 +37,55 @@ using namespace std;
 
 namespace BdevCpp {
 
+GeneralPool<ReadFuture, ClassAlloc<ReadFuture>> ReadFuture::readFuturePool(100, "readFuturePool");
+GeneralPool<WriteFuture, ClassAlloc<WriteFuture>> WriteFuture::writeFuturePool(100, "writeFuturePool");
+
 ReadFuture::ReadFuture(char *_buffer, size_t _bufferSize)
 : buffer(_buffer), bufferSize(_bufferSize) {}
 
 ReadFuture::~ReadFuture() {}
 
-int ReadFuture::get(Status status, const char *data, size_t _dataSize) {
+int ReadFuture::get(char *&data, size_t &_dataSize) {
+    unique_lock<mutex> lk(mtx);
+    cv.wait_for(lk, 1s, [this] { return !opStatus; });
+    if (opStatus)
+        return -1;
+
+    data = buffer;
+    _dataSize = bufferSize;
+    return opStatus;
+}
+
+void ReadFuture::signal(Status status, const char *data, size_t _dataSize) {
     unique_lock<mutex> lck(mtx);
     opStatus = (status.ok() == true) ? 0 : -1;
     if (!opStatus)
         ::memcpy(buffer, data, _dataSize);
     cv.notify_all();
-    return opStatus;
 }
+
+
 
 WriteFuture::WriteFuture(size_t _dataSize)
     : dataSize(_dataSize) {}
 
 WriteFuture::~WriteFuture() {}
 
-int WriteFuture::get(Status status, const char *data, size_t _dataSize) {
+int WriteFuture::get(char *&data, size_t &_dataSize) {
+    unique_lock<mutex> lk(mtx);
+    cv.wait_for(lk, 1s, [this] { return !opStatus; });
+    if (opStatus)
+        return -1;
+
+    _dataSize = dataSize;
+    return opStatus;
+}
+
+void WriteFuture::signal(Status status, const char *data, size_t _dataSize) {
+    unique_lock<mutex> lck(mtx);
     dataSize = _dataSize;
     opStatus = (status.ok() == true) ? 0 : -1;
-    return opStatus;
+    cv.notify_all();
 }
 
 } // namespace BdevCpp

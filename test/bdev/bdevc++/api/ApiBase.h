@@ -28,6 +28,7 @@ class ApiBase {
 
   protected:
     virtual int getIoPos(int desc, uint64_t &lba, uint8_t &lun) = 0;
+    virtual int getIoPos(int desc, uint64_t pos, uint64_t &lba, uint8_t &lun) = 0;
 
   public:
     virtual int open(const char *name, int flags, mode_t mode = S_IRUSR | S_IWUSR) = 0;

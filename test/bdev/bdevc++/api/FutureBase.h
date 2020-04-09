@@ -29,11 +29,12 @@ friend class WriteFuture;
     virtual ~FutureBase();
 
   protected:
-    virtual int get(BdevCpp::Status status, const char *data = 0, size_t dataSize = 0) = 0;
+    virtual int get(char *&data, size_t &_dataSize) = 0;
+    virtual void signal(Status status, const char *data, size_t _dataSize) = 0;
     virtual char *getData() = 0;
     virtual size_t getDataSize() = 0;
 
-  private:
+  protected:
     std::mutex mtx;
     std::condition_variable cv;
     int opStatus;

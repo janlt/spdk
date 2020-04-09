@@ -84,13 +84,13 @@ off_t SyncApi::lseek(int fd, off_t offset, int whence) {
 }
 
 int SyncApi::getIoPos(int desc, uint64_t &lba, uint8_t &lun) {
-    FileMap &map = FileMap::getInstance();
-    FileEmu *femu = map.getFile(desc);
-    if (!femu)
-        return -1;
     lba = (femu->pos.posLba + femu->geom.startLba)*femu->geom.blocksPerOptIo;
     lun = femu->pos.posLun;
     return 0;
+}
+
+int SyncApi::getIoPos(int desc, uint64_t pos, uint64_t &lba, uint8_t &lun) {
+    return -1;
 }
 
 int SyncApi::read(int desc, char *buffer, size_t bufferSize) {

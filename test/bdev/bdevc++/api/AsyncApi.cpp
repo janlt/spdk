@@ -56,6 +56,8 @@
 #include "SpdkIoBuf.h"
 #include "SpdkCore.h"
 
+#include "ClassAlloc.h"
+#include "GeneralPool.h"
 #include "FutureBase.h"
 #include "Future.h"
 #include "ApiBase.h"
@@ -81,10 +83,10 @@ off_t AsyncApi::lseek(int fd, off_t offset, int whence) {
 }
 
 int AsyncApi::getIoPos(int desc, uint64_t &lba, uint8_t &lun) {
-    FileMap &map = FileMap::getInstance();
-    FileEmu *femu = map.getFile(desc);
-    if (!femu)
-        return -1;
+    return -1;
+}
+
+int AsyncApi::getIoPos(int desc, uint64_t pos, uint64_t &lba, uint8_t &lun) {
     lba = femu->pos.posLba + femu->geom.startLba;
     lun = femu->pos.posLun;
     return 0;
@@ -103,11 +105,56 @@ int AsyncApi::fsync(int desc) {
 }
 
 FutureBase *AsyncApi::read(int desc, uint64_t pos, char *buffer, size_t bufferSize) {
-    return 0;
+    uint64_t lba;
+    uint8_t lun;
+    if (getIoPos(desc, pos, lba, lun) < 0)
+        return 0;
+
+    ReadFuture *rfut = ReadFuture::readFuturePool.get();
+    rfut->buffer = buffer;
+    rfut->bufferSize = bufferSize;
+
+    IoRqst *getRqst = IoRqst::readPool.get();
+    getRqst->finalizeRead(nullptr, bufferSize,
+         [rfut](
+             Status status, const char *data, size_t dataSize) {
+             rfut->signal(status, data, dataSize);
+         },
+         lba, lun);
+
+    if (spio->enqueue(getRqst) == false) {
+        IoRqst::readPool.put(getRqst);
+        ReadFuture::readFuturePool.put(rfut);
+        return 0;
+    }
+
+    return rfut;
 }
 
 FutureBase *AsyncApi::write(int desc, uint64_t pos, const char *data, size_t dataSize) {
-    return 0;
+    uint64_t lba;
+    uint8_t lun;
+    if (getIoPos(desc, pos, lba, lun) < 0)
+        return 0;
+
+    WriteFuture *wfut = WriteFuture::writeFuturePool.get();
+    wfut->dataSize = dataSize;
+
+    IoRqst *writeRqst = IoRqst::writePool.get();
+    writeRqst->finalizeWrite(data, dataSize,
+        [wfut](Status status,
+                const char *data, size_t dataSize) {
+            wfut->signal(status, data, dataSize);
+        },
+        lba, lun);
+
+    if (spio->enqueue(writeRqst) == false) {
+        IoRqst::writePool.put(writeRqst);
+        WriteFuture::writeFuturePool.put(wfut);
+        return 0;
+    }
+
+    return wfut;
 }
 
 } // namespace BdevCpp
