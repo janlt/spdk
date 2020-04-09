@@ -80,12 +80,12 @@ static void printTimeNow(const char *msg) {
     cout << msg << " " << time_buf << endl;
 }
 
+static char io_buf[2500000];
+static char io_cmp_buf[2500000];
 static int SyncIoTest(BdevCpp::SyncApi *api,
         const char *file_name, int mode, int check,
         int loop_count, int out_loop_count) {
     int rc = 0;
-    char buf[25000];
-    char cmp_buf[25000];
 
     int fd = !mode ? api->open(file_name, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR | O_SYNC | O_DIRECT) : 
         ::open(file_name, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR | O_SYNC | O_DIRECT);
@@ -94,7 +94,7 @@ static int SyncIoTest(BdevCpp::SyncApi *api,
         return -1;
     }
 
-    printTimeNow("Start test ");
+    printTimeNow("Start sync test ");
 
     uint64_t bytes_written = 0;
     uint64_t bytes_read = 0;
@@ -104,10 +104,10 @@ static int SyncIoTest(BdevCpp::SyncApi *api,
     for (int j = 0 ; j < out_loop_count ; j++) {
         for (int i = 0 ; i < loop_count ; i++) {
             size_t io_size = 512*(2*(i%20) + 1);
-            ::memset(buf, 'a' + i%20, io_size);
-            rc = !mode ? api->write(fd, buf, io_size) : ::write(fd, buf, io_size);
+            ::memset(io_buf, 'a' + i%20, io_size);
+            rc = !mode ? api->write(fd, io_buf, io_size) : ::write(fd, io_buf, io_size);
             if (rc < 0) {
-                cerr << "write failed rc: " << rc << " errno: " << errno << endl;
+                cerr << "write sync failed rc: " << rc << " errno: " << errno << endl;
                 break;
             }
 
@@ -130,19 +130,19 @@ static int SyncIoTest(BdevCpp::SyncApi *api,
 
             for (int i = 0 ; i < loop_count ; i++) {
                 size_t io_size = 512*(2*(i%20) + 1);
-                ::memset(cmp_buf, 'a' + i%20, io_size);
+                ::memset(io_cmp_buf, 'a' + i%20, io_size);
 
-                rc = !mode ? api->read(fd, buf, io_size) : ::read(fd, buf, io_size);
+                rc = !mode ? api->read(fd, io_buf, io_size) : ::read(fd, io_buf, io_size);
                 if (rc < 0) {
-                    cerr << "read failed rc: " << rc << " errno: " << errno << endl;
+                    cerr << "read sync failed rc: " << rc << " errno: " << errno << endl;
                     rc = -1;
                     break;
                 }
                 read_ios++;
                 bytes_read += io_size;
 
-                if (memcmp(buf, cmp_buf, io_size)) {
-                    cerr << "Corrupted data after read i: " << i << " io_size: " << io_size << endl;
+                if (memcmp(io_buf, io_cmp_buf, io_size)) {
+                    cerr << "Corrupted data after sync read i: " << i << " io_size: " << io_size << endl;
                     rc = -1;
                     break;
                 }
@@ -156,7 +156,7 @@ static int SyncIoTest(BdevCpp::SyncApi *api,
         }
     }
 
-    printTimeNow("End test ");
+    printTimeNow("End sync test ");
     cout << "bytes_written " << bytes_written << " bytes_read " << bytes_read <<
             " write_ios " << write_ios << " read_ios " << read_ios << endl;
 
@@ -165,10 +165,111 @@ static int SyncIoTest(BdevCpp::SyncApi *api,
     return rc;
 }
 
-static int AsyncIoTest(BdevCpp::AsyncApi *aApi, 
-        const char *file_name, int mode, int check,
+static int AsyncIoTest(BdevCpp::AsyncApi *api,
+        const char *file_name, int check,
         int loop_count, int out_loop_count) {
-    return 0;
+    int rc = 0;
+    char buf[25000];
+    char cmp_buf[25000];
+
+    int fd = api->open(file_name, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR | O_SYNC | O_DIRECT);
+    if (fd < 0) {
+        cerr << "open: " << file_name << " failed errno: " << errno << endl;
+        return -1;
+    }
+
+    const size_t maxWriteFutures = 2014;
+    BdevCpp::FutureBase *write_futures[maxWriteFutures];
+    size_t num_write_futures = 0;
+    const size_t maxReadFutures = 2014;
+    BdevCpp::FutureBase *read_futures[maxReadFutures];
+    size_t num_read_futures = 0;
+
+    printTimeNow("Start async test ");
+
+    uint64_t bytes_written = 0;
+    uint64_t bytes_read = 0;
+    uint64_t write_ios = 0;
+    uint64_t read_ios = 0;
+    uint64_t pos = 0;
+    uint64_t check_pos = pos;
+
+    bool get_out = false;
+    for (int j = 0 ; j < out_loop_count ; j++) {
+        check_pos = pos;
+        for (int i = 0 ; i < loop_count ; i++) {
+            size_t io_size = 512*(2*(i%20) + 1);
+            ::memset(buf, 'a' + i%20, io_size);
+            BdevCpp::FutureBase *wfut = api->write(fd, pos, buf, io_size);
+            pos += io_size;
+            if (!wfut || num_write_futures >= maxWriteFutures) {
+                for ( ; num_write_futures > 0 ; num_write_futures--) {
+                    char *data;
+                    size_t dataSize;
+                    int w_rc = dynamic_cast<BdevCpp::WriteFuture *>(write_futures[num_write_futures - 1])->get(data, dataSize);
+                    if (w_rc < 0) {
+                        cerr << "WriteFuture get failed rc: " << w_rc << endl;
+                        get_out = true;
+                        break;
+                    }
+                }
+            }
+            if (get_out == true)
+                break;
+            if (!wfut) {
+                cerr << "write async failed rc: " << rc << " errno: " << errno << endl;
+                break;
+            }
+            write_futures[num_write_futures] = wfut;
+
+            write_ios++;
+            bytes_written += io_size;
+        }
+
+        if (check) {
+            for (int i = 0 ; i < loop_count ; i++) {
+                size_t io_size = 512*(2*(i%20) + 1);
+                ::memset(cmp_buf, 'a' + i%20, io_size);
+
+                BdevCpp::FutureBase *rfut = api->read(fd, check_pos, buf, io_size);
+                check_pos += io_size;
+                if (!rfut || num_read_futures >= maxReadFutures) {
+                    for ( ; num_read_futures > 0 ; num_read_futures--) {
+                        char *data;
+                        size_t dataSize;
+                        int r_rc = dynamic_cast<BdevCpp::ReadFuture *>(read_futures[num_read_futures - 1])->get(data, dataSize);
+                        if (r_rc < 0) {
+                            cerr << "ReadFuture get failed rc: " << r_rc << endl;
+                            get_out = true;
+                            break;
+                        }
+                    }
+                }
+                if (!rfut) {
+                    cerr << "read sync failed rc: " << rc << " errno: " << errno << endl;
+                    rc = -1;
+                    break;
+                }
+                read_futures[num_read_futures++] = rfut;
+
+                read_ios++;
+                bytes_read += io_size;
+                if (memcmp(buf, cmp_buf, io_size)) {
+                    cerr << "Corrupted data after read i: " << i << " io_size: " << io_size << endl;
+                    rc = -1;
+                    break;
+                }
+            }
+        }
+    }
+
+    printTimeNow("End test ");
+    cout << "bytes_written " << bytes_written << " bytes_read " << bytes_read <<
+            " write_ios " << write_ios << " read_ios " << read_ios << endl;
+
+    rc = api->close(fd);
+
+    return rc;
 }
 
 static void usage(const char *prog)
@@ -365,7 +466,7 @@ int main(int argc, char **argv) {
     }
 
     if (async_test == true) {
-        rc = AsyncIoTest(asyncApi, async_file.c_str(), legacy_newstack_mode, integrity_check, loop_count, out_loop_count);
+        rc = AsyncIoTest(asyncApi, async_file.c_str(), integrity_check, loop_count, out_loop_count);
         if (rc)
             cerr << "AsyncIoTest failed rc: " << rc << endl;
     }
