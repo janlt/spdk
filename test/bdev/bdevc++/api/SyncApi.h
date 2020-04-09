@@ -26,8 +26,10 @@ class SyncApi : public ApiBase {
     IoPoller *spio;
 
   protected:
-    int getIoPos(int desc, uint64_t &lba, uint8_t &lun);
-    int getIoPos(int desc, uint64_t pos, uint64_t &lba, uint8_t &lun);
+    int getIoPosLinear(int desc, uint64_t &lba, uint8_t &lun);
+    int getIoPosLinear(int desc, uint64_t pos, uint64_t &lba, uint8_t &lun);
+    int getIoPosStriped(int desc, uint64_t &lba, uint8_t &lun);
+    int getIoPosStriped(int desc, uint64_t pos, uint64_t &lba, uint8_t &lun);
 
   public:
     int open(const char *name, int flags, mode_t mode = S_IRUSR | S_IWUSR);

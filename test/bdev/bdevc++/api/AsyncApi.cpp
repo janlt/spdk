@@ -82,11 +82,11 @@ off_t AsyncApi::lseek(int fd, off_t offset, int whence) {
     return ApiBase::lseek(fd, offset, whence);
 }
 
-int AsyncApi::getIoPos(int desc, uint64_t &lba, uint8_t &lun) {
+int AsyncApi::getIoPosLinear(int desc, uint64_t &lba, uint8_t &lun) {
     return -1;
 }
 
-int AsyncApi::getIoPos(int desc, uint64_t pos, uint64_t &lba, uint8_t &lun) {
+int AsyncApi::getIoPosLinear(int desc, uint64_t pos, uint64_t &lba, uint8_t &lun) {
     FilePos apos;
 
     apos.pos += pos;
@@ -100,6 +100,14 @@ int AsyncApi::getIoPos(int desc, uint64_t pos, uint64_t &lba, uint8_t &lun) {
     }
     lba = apos.posLba + femu->geom.startLba;
     lun = apos.posLun;
+    return 0;
+}
+
+int AsyncApi::getIoPosStriped(int desc, uint64_t &lba, uint8_t &lun) {
+    return -1;
+}
+
+int AsyncApi::getIoPosStriped(int desc, uint64_t pos, uint64_t &lba, uint8_t &lun) {
     return 0;
 }
 
@@ -118,7 +126,7 @@ int AsyncApi::fsync(int desc) {
 FutureBase *AsyncApi::read(int desc, uint64_t pos, char *buffer, size_t bufferSize) {
     uint64_t lba;
     uint8_t lun;
-    if (getIoPos(desc, pos, lba, lun) < 0)
+    if (getIoPosLinear(desc, pos, lba, lun) < 0)
         return 0;
 
     ReadFuture *rfut = ReadFuture::readFuturePool.get();
@@ -145,7 +153,7 @@ FutureBase *AsyncApi::read(int desc, uint64_t pos, char *buffer, size_t bufferSi
 FutureBase *AsyncApi::write(int desc, uint64_t pos, const char *data, size_t dataSize) {
     uint64_t lba;
     uint8_t lun;
-    if (getIoPos(desc, pos, lba, lun) < 0)
+    if (getIoPosLinear(desc, pos, lba, lun) < 0)
         return 0;
 
     WriteFuture *wfut = WriteFuture::writeFuturePool.get();

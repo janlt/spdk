@@ -1,4 +1,8 @@
 #include <errno.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <getopt.h>
 
 #include <iostream>
 #include <memory>
@@ -31,7 +35,9 @@
 #include "bdev/SpdkIoBuf.h"
 #include "bdev/SpdkCore.h"
 #include "FileEmu.h"
-#include "ApiBase.h"
+#include "api/FutureBase.h"
+#include "api/Future.h"
+#include "api/ApiBase.h"
 #include "api/SyncApi.h"
 #include "api/AsyncApi.h"
 #include "Api.h"
@@ -165,15 +171,163 @@ static int AsyncIoTest(BdevCpp::AsyncApi *aApi,
     return 0;
 }
 
+static void usage(const char *prog)
+{
+    cout <<
+        "Usage %s [options]\n"
+        "  -c, --spdk-conf                SPDK config file\n"
+        "  -s, --sync-file                Sync file name\n"
+        "  -a, --async-file               Async file name\n"
+        "  -m, --loop-count               Inner IO loop count\n"
+        "  -n, --outer-loop-count         Outer IO loop count\n"
+        "  -l, --legacy-newstack-mode     Use legacy (0) or new stack (1) file IO routines\n"
+        "  -i, --integrity-check          Run integrity check\n"
+        "  -O, --open-close-test          Run open/clsoe test\n"
+        "  -S, --sync-test                Run IO sync test\n"
+        "  -A, --async-test               Run IO async test\n"
+        "  -d, --debug                    Debug on\n"
+        "  -h, --help                     Print this help\n" << prog << endl;
+}
+
+static int mainGetopt(int argc, char *argv[],
+        string &spdk_conf,
+        string &sync_file,
+        string &async_file,
+        int &loop_count,
+        int &out_loop_count,
+        int &legacy_newstack_mode,
+        bool &integrity_check,
+        bool &open_close_test,
+        bool &sync_test,
+        bool &async_test,
+        bool &debug)
+{
+    int c = 0;
+    int ret = -1;
+
+    while (1) {
+        static char short_options[] = "c:s:a:m:n:l:i:dhOSA";
+        static struct option long_options[] = {
+            {"spdk-conf",               1, 0, 'c'},
+            {"sync-file",               1, 0, 's'},
+            {"async-file",              1, 0, 'a'},
+            {"loop-count",              1, 0, 'm'},
+            {"outer-loop-count",        1, 0, 'n'},
+            {"legacy-newstack-mode",    1, 0, 'l'},
+            {"integrity-check",         1, 0, 'i'},
+            {"open-close-test",         0, 0, 'O'},
+            {"sync-test",               0, 0, 'S'},
+            {"async-test",              0, 0, 'A'},
+            {"debug",                   0, 0, 'd'},
+            {"help",                    0, 0, 'h'},
+            {0, 0, 0, 0}
+        };
+
+        if ( (c = getopt_long(argc, argv, short_options, long_options, NULL)) == -1 ) {
+            break;
+        }
+
+        ret = 0;
+
+        switch ( c ) {
+        case 'c':
+            spdk_conf = optarg;
+            break;
+
+        case 's':
+            sync_file = optarg;
+            break;
+
+        case 'a':
+            async_file = optarg;
+            break;
+
+        case 'm':
+            loop_count = atoi(optarg);
+            break;
+
+        case 'n':
+            out_loop_count = atoi(optarg);
+            break;
+
+        case 'l':
+            legacy_newstack_mode = atoi(optarg);
+            break;
+
+        case 'i':
+            integrity_check = atoi(optarg);
+            break;
+
+        case 'O':
+            open_close_test = true;;
+            break;
+
+        case 'S':
+            sync_test = true;;
+            break;
+
+        case 'A':
+            async_test = true;;
+            break;
+
+        case 'd':
+            debug = true;
+            break;
+
+
+        case 'h':
+            usage(argv[0]);
+            break;
+
+        default:
+            ret = -1;
+            break;
+        }
+    }
+
+    return ret;
+}
+
 int main(int argc, char **argv) {
     int rc = 0;
     BdevCpp::Options options;
     BdevCpp::Options spdk_options;
+    bool debug = false;
+    string spdk_conf_str(spdk_conf);
+    int loop_count = 10;
+    int out_loop_count = 10;
+    const char *sync_file_name = "testsync";
+    string sync_file(sync_file_name);
+    const char *async_file_name = "testasync";
+    string async_file(async_file_name);
+    int legacy_newstack_mode = 0;
+    bool integrity_check = false;
 
-    if (boost::filesystem::exists(spdk_conf)) {
-        cout << "Io configuration file: " << spdk_conf << " ... " << endl;
+    bool open_close_test = false;
+    bool sync_test = false;
+    bool async_test = false;
+
+    int ret = mainGetopt(argc, argv,
+            spdk_conf_str,
+            sync_file,
+            async_file,
+            loop_count,
+            out_loop_count,
+            legacy_newstack_mode,
+            integrity_check,
+            open_close_test,
+            sync_test,
+            async_test,
+            debug);
+    if (ret) {
+        usage(argv[0]);
+        return ret;
+    }
+
+    if (boost::filesystem::exists(spdk_conf_str.c_str())) {
+        cout << "Io configuration file: " << spdk_conf_str << " ... " << endl;
         stringstream errorMsg;
-        if (BdevCpp::readConfig(spdk_conf, spdk_options, errorMsg) == false) {
+        if (BdevCpp::readConfig(spdk_conf_str.c_str(), spdk_options, errorMsg) == false) {
             cout << "Failed to read config file " << errorMsg.str() << endl;
             return -1;
         }
@@ -190,40 +344,31 @@ int main(int argc, char **argv) {
     BdevCpp::SyncApi *syncApi = api.getSyncApi();
     BdevCpp::AsyncApi *asyncApi = api.getAsyncApi();
 
-    const char *sync_file_name = "testsync";
-    if (argc > 1)
-        sync_file_name = argv[1];
+    if (open_close_test == true) {
+        rc = SyncOpenCloseTest(syncApi, sync_file.c_str());
+        if (rc) {
+            cerr << "Sync open/close failed rc: " << rc << endl;
+            return rc;
+        }
 
-    rc = SyncOpenCloseTest(syncApi, sync_file_name);
+        rc = AsyncOpenCloseTest(asyncApi, async_file.c_str());
+        if (rc) {
+            cerr << "Async open/close failed rc: " << rc << endl;
+            return rc;
+        }
+    }
 
-    const char *async_file_name = "testasync";
-    if (argc > 2)
-        async_file_name = argv[2];
+    if (sync_test == true) {
+        rc = SyncIoTest(syncApi, sync_file.c_str(), legacy_newstack_mode, integrity_check, loop_count, out_loop_count);
+        if (rc)
+            cerr << "SyncIoTest failed rc: " << rc << endl;
+    }
 
-    rc = AsyncOpenCloseTest(asyncApi, async_file_name);
-
-    if (rc < 0)
-        return rc;
-
-    int loop_count = 10;
-    int out_loop_count = 10;
-    if (argc > 3)
-        loop_count = atoi(argv[3]);
-    if (argc > 4)
-        out_loop_count = atoi(argv[4]);
-
-    int mode = 0;
-    if (argc > 5)
-        mode = atoi(argv[5]);
-    int check = 1;
-    if (argc > 6)
-        check = atoi(argv[6]);
-
-    rc = SyncIoTest(syncApi, sync_file_name, mode, check, loop_count, out_loop_count);
-    cout << "SyncIoTest rc: " << rc << endl;
-
-    rc = AsyncIoTest(asyncApi, async_file_name, mode, check, loop_count, out_loop_count);
-    cout << "AsyncIoTest rc: " << rc << endl;
+    if (async_test == true) {
+        rc = AsyncIoTest(asyncApi, async_file.c_str(), legacy_newstack_mode, integrity_check, loop_count, out_loop_count);
+        if (rc)
+            cerr << "AsyncIoTest failed rc: " << rc << endl;
+    }
 
     api.QuiesceIO(true);
     return rc;

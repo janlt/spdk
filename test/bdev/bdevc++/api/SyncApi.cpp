@@ -83,13 +83,21 @@ off_t SyncApi::lseek(int fd, off_t offset, int whence) {
     return ApiBase::lseek(fd, offset, whence);
 }
 
-int SyncApi::getIoPos(int desc, uint64_t &lba, uint8_t &lun) {
+int SyncApi::getIoPosLinear(int desc, uint64_t &lba, uint8_t &lun) {
     lba = (femu->pos.posLba + femu->geom.startLba)*femu->geom.blocksPerOptIo;
     lun = femu->pos.posLun;
     return 0;
 }
 
-int SyncApi::getIoPos(int desc, uint64_t pos, uint64_t &lba, uint8_t &lun) {
+int SyncApi::getIoPosLinear(int desc, uint64_t pos, uint64_t &lba, uint8_t &lun) {
+    return -1;
+}
+
+int SyncApi::getIoPosStriped(int desc, uint64_t &lba, uint8_t &lun) {
+    return 0;
+}
+
+int SyncApi::getIoPosStriped(int desc, uint64_t pos, uint64_t &lba, uint8_t &lun) {
     return -1;
 }
 
@@ -100,7 +108,7 @@ int SyncApi::read(int desc, char *buffer, size_t bufferSize) {
 
     uint64_t lba;
     uint8_t lun;
-    if (getIoPos(desc, lba, lun) < 0)
+    if (getIoPosLinear(desc, lba, lun) < 0)
         return -1;
 
     IoRqst *getRqst = IoRqst::readPool.get();
@@ -138,7 +146,7 @@ int SyncApi::write(int desc, const char *data, size_t dataSize) {
 
     uint64_t lba;
     uint8_t lun;
-    if (getIoPos(desc, lba, lun) < 0)
+    if (getIoPosLinear(desc, lba, lun) < 0)
         return -1;
 
     IoRqst *writeRqst = IoRqst::writePool.get();
