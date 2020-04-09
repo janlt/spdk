@@ -64,6 +64,10 @@ void ReadFuture::signal(Status status, const char *data, size_t _dataSize) {
     cv.notify_all();
 }
 
+void ReadFuture::sink() {
+    ReadFuture::readFuturePool.put(this);
+}
+
 
 
 WriteFuture::WriteFuture(size_t _dataSize)
@@ -86,6 +90,10 @@ void WriteFuture::signal(Status status, const char *data, size_t _dataSize) {
     dataSize = _dataSize;
     opStatus = (status.ok() == true) ? 0 : -1;
     cv.notify_all();
+}
+
+void WriteFuture::sink() {
+    WriteFuture::writeFuturePool.put(this);
 }
 
 } // namespace BdevCpp

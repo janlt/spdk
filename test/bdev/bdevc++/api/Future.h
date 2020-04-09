@@ -36,6 +36,7 @@ friend class ClassAlloc<ReadFuture>;
     size_t getDataSize() {
         return bufferSize;
     }
+    void sink();
 
   private:
     char *buffer;
@@ -62,6 +63,7 @@ friend class ClassAlloc<WriteFuture>;
     size_t getDataSize() {
         return dataSize;
     }
+    void sink();
 
   private:
     size_t dataSize;
