@@ -299,6 +299,8 @@ static int AsyncIoTest(BdevCpp::AsyncApi *api,
             }
         }
 
+        rc = AsyncIoCompleteWrites(api, write_ios, bytes_written);
+
         if (!rc && check) {
             for (int i = 0 ; i < loop_count ; i++) {
                 size_t io_size = 512*(2*(i%20) + 1);
