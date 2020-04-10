@@ -122,10 +122,10 @@ int ReadFuturePolling::get(char *&data, size_t &_dataSize, unsigned int _timeout
 }
 
 void ReadFuturePolling::signal(Status status, const char *data, size_t _dataSize) {
-    state = 1;
     opStatus = (status.ok() == true) ? 0 : -1;
     if (!opStatus)
         ::memcpy(buffer, data, _dataSize);
+    state = 1;
 }
 
 void ReadFuturePolling::sink() {
@@ -150,9 +150,9 @@ int WriteFuturePolling::get(char *&data, size_t &_dataSize, unsigned int _timeou
 }
 
 void WriteFuturePolling::signal(Status status, const char *data, size_t _dataSize) {
-    state = 1;
     dataSize = _dataSize;
     opStatus = (status.ok() == true) ? 0 : -1;
+    state = 1;
 }
 
 void WriteFuturePolling::sink() {
