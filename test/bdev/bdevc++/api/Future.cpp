@@ -45,9 +45,10 @@ ReadFuture::ReadFuture(char *_buffer, size_t _bufferSize)
 
 ReadFuture::~ReadFuture() {}
 
-int ReadFuture::get(char *&data, size_t &_dataSize) {
+int ReadFuture::get(char *&data, size_t &_dataSize, unsigned int _timeoutMsec) {
     unique_lock<mutex> lk(mtx);
-    cv.wait_for(lk, 1s, [this] { return !opStatus; });
+    const chrono::milliseconds timeout(_timeoutMsec);
+    cv.wait_for(lk, timeout, [this] { return !opStatus; });
     if (opStatus)
         return -1;
 
@@ -75,9 +76,10 @@ WriteFuture::WriteFuture(size_t _dataSize)
 
 WriteFuture::~WriteFuture() {}
 
-int WriteFuture::get(char *&data, size_t &_dataSize) {
+int WriteFuture::get(char *&data, size_t &_dataSize, unsigned int _timeoutMsec) {
     unique_lock<mutex> lk(mtx);
-    cv.wait_for(lk, 1s, [this] { return !opStatus; });
+    const chrono::milliseconds timeout(_timeoutMsec);
+    cv.wait_for(lk, timeout, [this] { return !opStatus; });
     if (opStatus)
         return -1;
 
