@@ -75,12 +75,14 @@ static void printTimeNow(const char *msg) {
 }
 
 static int SyncIoTest(BdevCpp::SyncApi *api,
-        const char *file_name, int loop_count, int out_loop_count) {
+        const char *file_name, int mode, int check,
+        int loop_count, int out_loop_count) {
     int rc = 0;
     char buf[25000];
     char cmp_buf[25000];
 
-    int fd = api->open(file_name, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
+    int fd = !mode ? api->open(file_name, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR | O_SYNC | O_DIRECT) : 
+        ::open(file_name, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR | O_SYNC | O_DIRECT);
     if (fd < 0) {
         cerr << "open: " << file_name << " failed errno: " << errno << endl;
         return -1;
@@ -97,7 +99,9 @@ static int SyncIoTest(BdevCpp::SyncApi *api,
         for (int i = 0 ; i < loop_count ; i++) {
             size_t io_size = 512*(2*(i%20) + 1);
             ::memset(buf, 'a' + i%20, io_size);
-            rc = api->write(fd, buf, io_size);
+            rc = !mode ? api->write(fd, buf, io_size) : ::write(fd, buf, io_size);
+            if (mode)
+                rc = ::fsync(fd);
             if (rc < 0) {
                 cerr << "write sync failed rc: " << rc << " errno: " << errno << endl;
                 break;
@@ -106,7 +110,8 @@ static int SyncIoTest(BdevCpp::SyncApi *api,
             bytes_written += io_size;
         }
 
-        rc = api->lseek(fd, 0, SEEK_SET);
+        if (check) {
+        rc = !mode ? api->lseek(fd, 0, SEEK_SET) : ::lseek(fd, 0, SEEK_SET);
         if (rc < 0) {
             cerr << "week sync failed rc: " << rc << " errno: " << errno << endl;
             return rc;
@@ -115,7 +120,8 @@ static int SyncIoTest(BdevCpp::SyncApi *api,
         for (int i = 0 ; i < loop_count ; i++) {
             size_t io_size = 512*(2*(i%20) + 1);
             ::memset(cmp_buf, 'a' + i%20, io_size);
-            rc = api->read(fd, buf, io_size);
+
+            rc = !mode ? api->read(fd, buf, io_size) : ::read(fd, buf, io_size);
             if (rc < 0) {
                 cerr << "read sync failed rc: " << rc << " errno: " << errno << endl;
                 rc = -1;
@@ -131,10 +137,11 @@ static int SyncIoTest(BdevCpp::SyncApi *api,
             }
         }
 
-        rc = api->lseek(fd, 0, SEEK_SET);
+        rc = !mode ? api->lseek(fd, 0, SEEK_SET) : ::lseek(fd, 0, SEEK_SET);
         if (rc < 0) {
             cerr << "week sync failed rc: " << rc << " errno: " << errno << endl;
             return rc;
+        }
         }
     }
 
@@ -142,10 +149,14 @@ static int SyncIoTest(BdevCpp::SyncApi *api,
     cout << "bytes_written " << bytes_written << " bytes_read " << bytes_read <<
             " write_ios " << write_ios << " read_ios " << read_ios << endl;
 
+    rc = !mode ? api->close(fd) : ::close(fd);
+
     return rc;
 }
 
-static int AsyncIoTest(BdevCpp::AsyncApi *aApi, const char *file_name, int loop_count, int out_loop_count) {
+static int AsyncIoTest(BdevCpp::AsyncApi *aApi, 
+        const char *file_name, int mode, int check,
+        int loop_count, int out_loop_count) {
     return 0;
 }
 
@@ -196,10 +207,17 @@ int main(int argc, char **argv) {
     if (argc > 4)
         out_loop_count = atoi(argv[3]);
 
-    rc = SyncIoTest(syncApi, sync_file_name, loop_count, out_loop_count);
+    int mode = 0;
+    if (argc > 5)
+        mode = atoi(argv[5]);
+    int check = 1;
+    if (argc > 6)
+        check = atoi(argv[6]);
+
+    rc = SyncIoTest(syncApi, sync_file_name, mode, check, loop_count, out_loop_count);
     cout << "SyncIoTest rc: " << rc << endl;
 
-    rc = AsyncIoTest(asyncApi, async_file_name, loop_count, out_loop_count);
+    rc = AsyncIoTest(asyncApi, async_file_name, mode, check, loop_count, out_loop_count);
     cout << "AsyncIoTest rc: " << rc << endl;
 
     api.QuiesceIO(true);
