@@ -210,7 +210,7 @@ int main(int argc, char **argv) {
     if (argc > 3)
         loop_count = atoi(argv[3]);
     if (argc > 4)
-        out_loop_count = atoi(argv[3]);
+        out_loop_count = atoi(argv[4]);
 
     int mode = 0;
     if (argc > 5)
