@@ -82,6 +82,7 @@ static void printTimeNow(const char *msg) {
 
 static char io_buf[2500000];
 static char io_cmp_buf[2500000];
+
 static int SyncIoTest(BdevCpp::SyncApi *api,
         const char *file_name, int mode, int check,
         int loop_count, int out_loop_count) {
@@ -121,7 +122,7 @@ static int SyncIoTest(BdevCpp::SyncApi *api,
             bytes_written += io_size;
         }
 
-        if (check) {
+        if (!rc && check) {
             rc = !mode ? api->lseek(fd, 0, SEEK_SET) : ::lseek(fd, 0, SEEK_SET);
             if (rc < 0) {
                 cerr << "lseek failed rc: " << rc << " errno: " << errno << endl;
@@ -157,20 +158,103 @@ static int SyncIoTest(BdevCpp::SyncApi *api,
     }
 
     printTimeNow("End sync test ");
-    cout << "bytes_written " << bytes_written << " bytes_read " << bytes_read <<
+    if (!rc)
+        cout << "bytes_written " << bytes_written << " bytes_read " << bytes_read <<
             " write_ios " << write_ios << " read_ios " << read_ios << endl;
+    else
+        cerr << "Sync test failed rc " << rc << endl;
 
     rc = !mode ? api->close(fd) : ::close(fd);
 
     return rc;
 }
 
+//
+// Async IO test
+//
+const size_t maxWriteFutures = 256;
+static BdevCpp::FutureBase *write_futures[maxWriteFutures];
+static size_t num_write_futures = 0;
+const size_t maxReadFutures = 256;
+static BdevCpp::FutureBase *read_futures[maxReadFutures];
+static size_t num_read_futures = 0;
+
+static char *io_buffers[maxWriteFutures];
+static char *io_cmp_buffers[maxReadFutures];
+static size_t io_sizes[maxReadFutures];
+
+static int AsyncIoCompleteWrites(BdevCpp::AsyncApi *api,
+        size_t &write_ios,
+        size_t &bytes_written) {
+    int rc = 0;
+
+    size_t curr_idx = num_write_futures;
+    for (size_t i = 0 ; i <= curr_idx ; i++) {
+        char *data;
+        size_t dataSize;
+
+        if (!write_futures[i]) {
+            num_write_futures--;
+            continue;
+        }
+
+        int w_rc = dynamic_cast<BdevCpp::WriteFuture *>(write_futures[i])->get(data, dataSize);
+        if (w_rc < 0) {
+            cerr << "WriteFuture get failed rc: " << w_rc << endl;
+            rc = -1;
+            break;
+        }
+
+        write_ios++;
+        bytes_written += dataSize;
+
+        num_write_futures--;
+    }
+
+    return rc;
+}
+
+static int AsyncIoCompleteReads(BdevCpp::AsyncApi *api,
+        size_t &read_ios,
+        size_t &bytes_read) {
+    int rc = 0;
+
+    size_t curr_idx = num_read_futures;
+    for (size_t i ; i <= curr_idx ; i++) {
+        char *data;
+        size_t dataSize;
+
+        if (!read_futures[i]) {
+            num_read_futures--;
+            continue;
+        }
+
+        int r_rc = dynamic_cast<BdevCpp::ReadFuture *>(read_futures[i])->get(data, dataSize);
+        if (r_rc < 0) {
+            cerr << "ReadFuture get failed rc: " << r_rc << endl;
+            rc = -1;
+            break;
+        }
+
+        read_ios++;
+        bytes_read += dataSize;
+
+        if (::memcmp(io_buffers[i], io_cmp_buffers[i], io_sizes[i])) {
+            cerr << "Corrupted data after read at idx: " << i << " io_size: " << io_sizes[i] << endl;
+            rc = -1;
+            break;
+        }
+
+        num_read_futures--;
+    }
+
+    return rc;
+}
+
 static int AsyncIoTest(BdevCpp::AsyncApi *api,
         const char *file_name, int check,
-        int loop_count, int out_loop_count) {
+        int loop_count, int out_loop_count, size_t max_queued) {
     int rc = 0;
-    char buf[25000];
-    char cmp_buf[25000];
 
     int fd = api->open(file_name, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR | O_SYNC | O_DIRECT);
     if (fd < 0) {
@@ -178,12 +262,10 @@ static int AsyncIoTest(BdevCpp::AsyncApi *api,
         return -1;
     }
 
-    const size_t maxWriteFutures = 2014;
-    BdevCpp::FutureBase *write_futures[maxWriteFutures];
-    size_t num_write_futures = 0;
-    const size_t maxReadFutures = 2014;
-    BdevCpp::FutureBase *read_futures[maxReadFutures];
-    size_t num_read_futures = 0;
+    for (size_t i = 0 ; i < maxWriteFutures ; i++)
+        io_buffers[i] = new char[250000];
+    for (size_t i = 0 ; i < maxReadFutures ; i++)
+        io_cmp_buffers[i] = new char[250000];
 
     printTimeNow("Start async test ");
 
@@ -194,80 +276,67 @@ static int AsyncIoTest(BdevCpp::AsyncApi *api,
     uint64_t pos = 0;
     uint64_t check_pos = pos;
 
-    bool get_out = false;
     for (int j = 0 ; j < out_loop_count ; j++) {
         check_pos = pos;
         for (int i = 0 ; i < loop_count ; i++) {
             size_t io_size = 512*(2*(i%20) + 1);
-            ::memset(buf, 'a' + i%20, io_size);
-            BdevCpp::FutureBase *wfut = api->write(fd, pos, buf, io_size);
-            pos += io_size;
-            if (!wfut || num_write_futures >= maxWriteFutures) {
-                for ( ; num_write_futures > 0 ; num_write_futures--) {
-                    char *data;
-                    size_t dataSize;
-                    int w_rc = dynamic_cast<BdevCpp::WriteFuture *>(write_futures[num_write_futures - 1])->get(data, dataSize);
-                    if (w_rc < 0) {
-                        cerr << "WriteFuture get failed rc: " << w_rc << endl;
-                        get_out = true;
-                        break;
-                    }
-                }
-            }
-            if (get_out == true)
-                break;
-            if (!wfut) {
-                cerr << "write async failed rc: " << rc << " errno: " << errno << endl;
-                break;
-            }
-            write_futures[num_write_futures] = wfut;
+            ::memset(io_buffers[num_write_futures], 'a' + i%20, io_size);
 
-            write_ios++;
-            bytes_written += io_size;
+            write_futures[num_write_futures] = api->write(fd, pos, io_buffers[num_write_futures], io_size);
+            pos += io_size;
+            if (!write_futures[num_write_futures]) {
+                rc = AsyncIoCompleteWrites(api, write_ios, bytes_written);
+                continue;
+            }
+
+            if (rc < 0)
+                break;
+
+            if (num_write_futures > max_queued || num_write_futures >= maxWriteFutures) {
+                rc = AsyncIoCompleteWrites(api, write_ios, bytes_written);
+            } else {
+                num_write_futures++;
+            }
         }
 
-        if (check) {
+        if (!rc && check) {
             for (int i = 0 ; i < loop_count ; i++) {
                 size_t io_size = 512*(2*(i%20) + 1);
-                ::memset(cmp_buf, 'a' + i%20, io_size);
+                ::memset(io_cmp_buffers[num_read_futures], 'a' + i%20, io_size);
+                io_sizes[num_read_futures] = io_size;
 
-                BdevCpp::FutureBase *rfut = api->read(fd, check_pos, buf, io_size);
+                read_futures[num_read_futures] = api->read(fd, check_pos, io_buffers[num_read_futures], io_size);
                 check_pos += io_size;
-                if (!rfut || num_read_futures >= maxReadFutures) {
-                    for ( ; num_read_futures > 0 ; num_read_futures--) {
-                        char *data;
-                        size_t dataSize;
-                        int r_rc = dynamic_cast<BdevCpp::ReadFuture *>(read_futures[num_read_futures - 1])->get(data, dataSize);
-                        if (r_rc < 0) {
-                            cerr << "ReadFuture get failed rc: " << r_rc << endl;
-                            get_out = true;
-                            break;
-                        }
-                    }
+                if (!read_futures[num_read_futures]) {
+                    rc = AsyncIoCompleteReads(api, read_ios, bytes_read);
                 }
-                if (!rfut) {
-                    cerr << "read sync failed rc: " << rc << " errno: " << errno << endl;
-                    rc = -1;
+                if (rc < 0)
                     break;
-                }
-                read_futures[num_read_futures++] = rfut;
 
-                read_ios++;
-                bytes_read += io_size;
-                if (memcmp(buf, cmp_buf, io_size)) {
-                    cerr << "Corrupted data after read i: " << i << " io_size: " << io_size << endl;
-                    rc = -1;
-                    break;
+                if (num_read_futures > max_queued || num_read_futures >= maxReadFutures) {
+                    rc = AsyncIoCompleteReads(api, read_ios, bytes_read);
+                } else {
+                    num_read_futures++;
                 }
             }
+
+            rc = AsyncIoCompleteReads(api, read_ios, bytes_read);
         }
     }
 
-    printTimeNow("End test ");
-    cout << "bytes_written " << bytes_written << " bytes_read " << bytes_read <<
+    printTimeNow("End async test");
+    if (!rc)
+        cout << "bytes_written " << bytes_written << " bytes_read " << bytes_read <<
             " write_ios " << write_ios << " read_ios " << read_ios << endl;
+    else
+        cerr << "Test failed rc " << rc << endl;
 
     rc = api->close(fd);
+
+    for (size_t i = 0 ; i < maxWriteFutures ; i++)
+        delete [] io_buffers[i];
+    for (size_t i = 0 ; i < maxReadFutures ; i++)
+        delete [] io_cmp_buffers[i];
 
     return rc;
 }
@@ -276,17 +345,18 @@ static void usage(const char *prog)
 {
     cout <<
         "Usage %s [options]\n"
-        "  -c, --spdk-conf                SPDK config file\n"
-        "  -s, --sync-file                Sync file name\n"
-        "  -a, --async-file               Async file name\n"
-        "  -m, --loop-count               Inner IO loop count\n"
-        "  -n, --outer-loop-count         Outer IO loop count\n"
-        "  -l, --legacy-newstack-mode     Use legacy (0) or new stack (1) file IO routines\n"
-        "  -i, --integrity-check          Run integrity check\n"
+        "  -c, --spdk-conf                SPDK config file (config.spdk - default)\n"
+        "  -s, --sync-file                Sync file name (testsync - default)\n"
+        "  -a, --async-file               Async file name (testasync - default)\n"
+        "  -m, --loop-count               Inner IO loop count (10 - default)\n"
+        "  -n, --outer-loop-count         Outer IO loop count (10 - default)\n"
+        "  -q, --max-queued               Max queued async IOs (10 - default)\n"
+        "  -l, --legacy-newstack-mode     Use legacy (1) or new stack (0 - default) file IO routines\n"
+        "  -i, --integrity-check          Run integrity check (false - default)\n"
         "  -O, --open-close-test          Run open/clsoe test\n"
         "  -S, --sync-test                Run IO sync test\n"
         "  -A, --async-test               Run IO async test\n"
-        "  -d, --debug                    Debug on\n"
+        "  -d, --debug                    Debug on (false - default)\n"
         "  -h, --help                     Print this help\n" << prog << endl;
 }
 
@@ -296,6 +366,7 @@ static int mainGetopt(int argc, char *argv[],
         string &async_file,
         int &loop_count,
         int &out_loop_count,
+        size_t &max_queued,
         int &legacy_newstack_mode,
         bool &integrity_check,
         bool &open_close_test,
@@ -307,7 +378,7 @@ static int mainGetopt(int argc, char *argv[],
     int ret = -1;
 
     while (1) {
-        static char short_options[] = "c:s:a:m:n:l:i:dhOSA";
+        static char short_options[] = "c:s:a:m:n:l:i:q:dhOSA";
         static struct option long_options[] = {
             {"spdk-conf",               1, 0, 'c'},
             {"sync-file",               1, 0, 's'},
@@ -316,6 +387,7 @@ static int mainGetopt(int argc, char *argv[],
             {"outer-loop-count",        1, 0, 'n'},
             {"legacy-newstack-mode",    1, 0, 'l'},
             {"integrity-check",         1, 0, 'i'},
+            {"max-queued",              1, 0, 'q'},
             {"open-close-test",         0, 0, 'O'},
             {"sync-test",               0, 0, 'S'},
             {"async-test",              0, 0, 'A'},
@@ -349,6 +421,10 @@ static int mainGetopt(int argc, char *argv[],
 
         case 'n':
             out_loop_count = atoi(optarg);
+            break;
+
+        case 'q':
+            max_queued = static_cast<size_t>(atoi(optarg));
             break;
 
         case 'l':
@@ -397,6 +473,7 @@ int main(int argc, char **argv) {
     string spdk_conf_str(spdk_conf);
     int loop_count = 10;
     int out_loop_count = 10;
+    size_t max_queued = 10000000000;
     const char *sync_file_name = "testsync";
     string sync_file(sync_file_name);
     const char *async_file_name = "testasync";
@@ -414,6 +491,7 @@ int main(int argc, char **argv) {
             async_file,
             loop_count,
             out_loop_count,
+            max_queued,
             legacy_newstack_mode,
             integrity_check,
             open_close_test,
@@ -466,7 +544,7 @@ int main(int argc, char **argv) {
     }
 
     if (async_test == true) {
-        rc = AsyncIoTest(asyncApi, async_file.c_str(), integrity_check, loop_count, out_loop_count);
+        rc = AsyncIoTest(asyncApi, async_file.c_str(), integrity_check, loop_count, out_loop_count, max_queued);
         if (rc)
             cerr << "AsyncIoTest failed rc: " << rc << endl;
     }
