@@ -189,14 +189,12 @@ static int AsyncIoCompleteWrites(BdevCpp::AsyncApi *api,
     int rc = 0;
 
     size_t curr_idx = num_write_futures;
-    for (size_t i = 0 ; i <= curr_idx ; i++) {
+    for (size_t i = 0 ; i < curr_idx ; i++) {
         char *data;
         size_t dataSize;
 
-        if (!write_futures[i]) {
-            num_write_futures--;
+        if (!write_futures[i])
             continue;
-        }
 
         int w_rc = dynamic_cast<BdevCpp::WriteFuture *>(write_futures[i])->get(data, dataSize);
         if (w_rc < 0) {
@@ -207,9 +205,8 @@ static int AsyncIoCompleteWrites(BdevCpp::AsyncApi *api,
 
         write_ios++;
         bytes_written += dataSize;
-
-        num_write_futures--;
     }
+    num_write_futures = 0;
 
     return rc;
 }
@@ -220,14 +217,12 @@ static int AsyncIoCompleteReads(BdevCpp::AsyncApi *api,
     int rc = 0;
 
     size_t curr_idx = num_read_futures;
-    for (size_t i ; i <= curr_idx ; i++) {
+    for (size_t i ; i < curr_idx ; i++) {
         char *data;
         size_t dataSize;
 
-        if (!read_futures[i]) {
-            num_read_futures--;
+        if (!read_futures[i])
             continue;
-        }
 
         int r_rc = dynamic_cast<BdevCpp::ReadFuture *>(read_futures[i])->get(data, dataSize);
         if (r_rc < 0) {
@@ -244,9 +239,8 @@ static int AsyncIoCompleteReads(BdevCpp::AsyncApi *api,
             rc = -1;
             break;
         }
-
-        num_read_futures--;
     }
+    num_read_futures = 0;
 
     return rc;
 }
@@ -283,20 +277,18 @@ static int AsyncIoTest(BdevCpp::AsyncApi *api,
             ::memset(io_buffers[num_write_futures], 'a' + i%20, io_size);
 
             write_futures[num_write_futures] = api->write(fd, pos, io_buffers[num_write_futures], io_size);
+            num_write_futures++;
             pos += io_size;
-            if (!write_futures[num_write_futures]) {
+
+            if (!write_futures[num_write_futures - 1]) {
                 rc = AsyncIoCompleteWrites(api, write_ios, bytes_written);
+                if (rc < 0)
+                    break;
                 continue;
             }
 
-            if (rc < 0)
-                break;
-
-            if (num_write_futures > max_queued || num_write_futures >= maxWriteFutures) {
+            if (num_write_futures >= max_queued || num_write_futures >= maxWriteFutures)
                 rc = AsyncIoCompleteWrites(api, write_ios, bytes_written);
-            } else {
-                num_write_futures++;
-            }
         }
 
         rc = AsyncIoCompleteWrites(api, write_ios, bytes_written);
@@ -308,18 +300,18 @@ static int AsyncIoTest(BdevCpp::AsyncApi *api,
                 io_sizes[num_read_futures] = io_size;
 
                 read_futures[num_read_futures] = api->read(fd, check_pos, io_buffers[num_read_futures], io_size);
+                num_read_futures++;
                 check_pos += io_size;
-                if (!read_futures[num_read_futures]) {
-                    rc = AsyncIoCompleteReads(api, read_ios, bytes_read);
-                }
-                if (rc < 0)
-                    break;
 
-                if (num_read_futures > max_queued || num_read_futures >= maxReadFutures) {
+                if (!read_futures[num_read_futures - 1]) {
                     rc = AsyncIoCompleteReads(api, read_ios, bytes_read);
-                } else {
-                    num_read_futures++;
+                    if (rc < 0)
+                        break;
+                    continue;
                 }
+
+                if (num_read_futures > max_queued || num_read_futures >= maxReadFutures)
+                    rc = AsyncIoCompleteReads(api, read_ios, bytes_read);
             }
 
             rc = AsyncIoCompleteReads(api, read_ios, bytes_read);
@@ -475,7 +467,7 @@ int main(int argc, char **argv) {
     string spdk_conf_str(spdk_conf);
     int loop_count = 10;
     int out_loop_count = 10;
-    size_t max_queued = 10000000000;
+    size_t max_queued = maxWriteFutures - 2;
     const char *sync_file_name = "testsync";
     string sync_file(sync_file_name);
     const char *async_file_name = "testasync";
