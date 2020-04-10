@@ -87,9 +87,8 @@ int AsyncApi::getIoPosLinear(int desc, uint64_t &lba, uint8_t &lun) {
 }
 
 int AsyncApi::getIoPosLinear(int desc, uint64_t pos, uint64_t &lba, uint8_t &lun) {
-    FilePos apos;
-
-    apos.pos += pos;
+    FilePos &apos = femu->pos;
+    apos.pos = pos;
     int64_t deltaLbas = 0;
     if (pos > 0)
         deltaLbas = pos/femu->geom.optLbaSize + 1;
