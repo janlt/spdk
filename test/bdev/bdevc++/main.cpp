@@ -196,7 +196,11 @@ static int AsyncIoCompleteWrites(BdevCpp::AsyncApi *api,
         if (!write_futures[i])
             continue;
 
-        int w_rc = dynamic_cast<BdevCpp::WriteFuture *>(write_futures[i])->get(data, dataSize);
+        int w_rc;
+        if (dynamic_cast<BdevCpp::WriteFuture *>(write_futures[i]))
+            w_rc = dynamic_cast<BdevCpp::WriteFuture *>(write_futures[i])->get(data, dataSize);
+        else
+            w_rc = dynamic_cast<BdevCpp::WriteFuturePolling *>(write_futures[i])->get(data, dataSize);
         if (w_rc < 0) {
             cerr << "WriteFuture get failed rc: " << w_rc << endl;
             rc = -1;
@@ -225,7 +229,11 @@ static int AsyncIoCompleteReads(BdevCpp::AsyncApi *api,
         if (!read_futures[i])
             continue;
 
-        int r_rc = dynamic_cast<BdevCpp::ReadFuture *>(read_futures[i])->get(data, dataSize);
+        int r_rc;
+        if (dynamic_cast<BdevCpp::ReadFuture *>(read_futures[i]))
+            r_rc = dynamic_cast<BdevCpp::ReadFuture *>(read_futures[i])->get(data, dataSize);
+        else
+            r_rc = dynamic_cast<BdevCpp::ReadFuturePolling *>(read_futures[i])->get(data, dataSize);
         if (r_rc < 0) {
             cerr << "ReadFuture get failed rc: " << r_rc << endl;
             rc = -1;
