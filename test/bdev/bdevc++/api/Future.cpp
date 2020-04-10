@@ -57,9 +57,9 @@ int ReadFuture::get(char *&data, size_t &_dataSize, unsigned int _timeoutMsec) {
     return opStatus;
 }
 
-void ReadFuture::signal(Status status, const char *data, size_t _dataSize) {
+void ReadFuture::signal(StatusCode status, const char *data, size_t _dataSize) {
     unique_lock<mutex> lck(mtx);
-    opStatus = (status.ok() == true) ? 0 : -1;
+    opStatus = (status == StatusCode::OK) ? 0 : -1;
     if (!opStatus)
         ::memcpy(buffer, data, _dataSize);
     cv.notify_all();
@@ -88,10 +88,10 @@ int WriteFuture::get(char *&data, size_t &_dataSize, unsigned int _timeoutMsec) 
     return opStatus;
 }
 
-void WriteFuture::signal(Status status, const char *data, size_t _dataSize) {
+void WriteFuture::signal(StatusCode status, const char *data, size_t _dataSize) {
     unique_lock<mutex> lck(mtx);
     dataSize = _dataSize;
-    opStatus = (status.ok() == true) ? 0 : -1;
+    opStatus = (status == StatusCode::OK) ? 0 : -1;
     cv.notify_all();
 }
 
@@ -121,8 +121,8 @@ int ReadFuturePolling::get(char *&data, size_t &_dataSize, unsigned int _timeout
     return opStatus;
 }
 
-void ReadFuturePolling::signal(Status status, const char *data, size_t _dataSize) {
-    opStatus = (status.ok() == true) ? 0 : -1;
+void ReadFuturePolling::signal(StatusCode status, const char *data, size_t _dataSize) {
+    opStatus = (status == StatusCode::OK) ? 0 : -1;
     if (!opStatus)
         ::memcpy(buffer, data, _dataSize);
     state = 1;
@@ -149,9 +149,9 @@ int WriteFuturePolling::get(char *&data, size_t &_dataSize, unsigned int _timeou
     return opStatus;
 }
 
-void WriteFuturePolling::signal(Status status, const char *data, size_t _dataSize) {
+void WriteFuturePolling::signal(StatusCode status, const char *data, size_t _dataSize) {
     dataSize = _dataSize;
-    opStatus = (status.ok() == true) ? 0 : -1;
+    opStatus = (status == StatusCode::OK) ? 0 : -1;
     state = 1;
 }
 

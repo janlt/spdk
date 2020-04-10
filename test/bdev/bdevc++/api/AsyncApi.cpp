@@ -139,7 +139,7 @@ FutureBase *AsyncApi::read(int desc, uint64_t pos, char *buffer, size_t bufferSi
     IoRqst *getRqst = IoRqst::readPool.get();
     getRqst->finalizeRead(nullptr, bufferSize,
          [rfut](
-             Status status, const char *data, size_t dataSize) {
+             StatusCode status, const char *data, size_t dataSize) {
              rfut->signal(status, data, dataSize);
          },
          lba, lun);
@@ -168,7 +168,7 @@ FutureBase *AsyncApi::write(int desc, uint64_t pos, const char *data, size_t dat
 
     IoRqst *writeRqst = IoRqst::writePool.get();
     writeRqst->finalizeWrite(data, dataSize,
-        [wfut](Status status,
+        [wfut](StatusCode status,
                 const char *data, size_t dataSize) {
             wfut->signal(status, data, dataSize);
         },

@@ -36,7 +36,7 @@ struct ConstValCtx {
     const void *data = nullptr;
 };
 
-using RqstCallback = std::function<void(Status status, const char *data, const size_t dataSize)>;
+using RqstCallback = std::function<void(StatusCode status, const char *data, const size_t dataSize)>;
 
 template <class T>
 class Rqst {

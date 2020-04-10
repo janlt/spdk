@@ -113,15 +113,15 @@ int SyncApi::read(int desc, char *buffer, size_t bufferSize) {
 
     IoRqst *getRqst = IoRqst::readPool.get();
     getRqst->finalizeRead(nullptr, bufferSize,
-                         [&mtx, &cv, &ready, buffer, bufferSize](
-                             Status status, const char *data, size_t dataSize) {
-                             unique_lock<mutex> lck(mtx);
-                             ready = status.ok();
-                             if (ready == true)
-                                 memcpy(buffer, data, dataSize);
-                             cv.notify_all();
-                         },
-                         lba, lun);
+         [&mtx, &cv, &ready, buffer, bufferSize](
+             StatusCode status, const char *data, size_t dataSize) {
+             unique_lock<mutex> lck(mtx);
+             ready = status == StatusCode::OK ? true : false;
+             if (ready == true)
+                 memcpy(buffer, data, dataSize);
+             cv.notify_all();
+         },
+         lba, lun);
 
     if (spio->enqueue(getRqst) == false) {
         IoRqst::readPool.put(getRqst);
@@ -151,10 +151,10 @@ int SyncApi::write(int desc, const char *data, size_t dataSize) {
 
     IoRqst *writeRqst = IoRqst::writePool.get();
     writeRqst->finalizeWrite(data, dataSize,
-        [&mtx, &cv, &ready](Status status,
-                            const char *data, size_t dataSize) {
+        [&mtx, &cv, &ready](StatusCode status,
+                const char *data, size_t dataSize) {
             unique_lock<mutex> lck(mtx);
-            ready = status.ok();
+            ready = status == StatusCode::OK ? true : false;
             cv.notify_all();
         },
         lba, lun);
