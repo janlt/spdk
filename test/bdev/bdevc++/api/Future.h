@@ -36,11 +36,21 @@ friend class ClassAlloc<ReadFuture>;
     size_t getDataSize() {
         return bufferSize;
     }
+    void setBuffer(char *_buffer) {
+        buffer = _buffer;
+    }
+    void setBufferSize(size_t _bufferSize) {
+        bufferSize = _bufferSize;
+    }
+    void setDataSize(size_t _dataSize) {}
     void sink();
+    void reset() {}
 
   private:
     char *buffer;
     size_t bufferSize;
+    std::mutex mtx;
+    std::condition_variable cv;
 
     static BdevCpp::GeneralPool<ReadFuture, BdevCpp::ClassAlloc<ReadFuture>> readFuturePool;
 };
@@ -63,12 +73,95 @@ friend class ClassAlloc<WriteFuture>;
     size_t getDataSize() {
         return dataSize;
     }
+    void setBuffer(char *_buffer) {}
+    void setBufferSize(size_t _bufferSize) {}
+    void setDataSize(size_t _dataSize) {
+        dataSize = _dataSize;
+    }
     void sink();
+    void reset() {}
 
   private:
     size_t dataSize;
+    std::mutex mtx;
+    std::condition_variable cv;
 
     static BdevCpp::GeneralPool<WriteFuture, BdevCpp::ClassAlloc<WriteFuture>> writeFuturePool;
+};
+
+
+
+class ReadFuturePolling: public FutureBase {
+friend class Api;
+friend class AsyncApi;
+friend class ClassAlloc<ReadFuturePolling>;
+
+  private:
+    ReadFuturePolling(char *_buffer = 0, size_t _bufferSize = 0);
+    virtual ~ReadFuturePolling();
+
+  public:
+    int get(char *&data, size_t &_dataSize, unsigned int _timeoutMsec = 100);
+    void signal(Status status, const char *data, size_t _dataSize);
+    char *getData() {
+        return buffer;
+    }
+    size_t getDataSize() {
+        return bufferSize;
+    }
+    void setBuffer(char *_buffer) {
+       buffer = _buffer;
+    }
+    void setBufferSize(size_t _bufferSize) {
+        bufferSize = _bufferSize;
+    }
+    void setDataSize(size_t _dataSize) {}
+    void sink();
+    void reset() {
+        state = 0;
+    }
+
+  private:
+    char *buffer;
+    size_t bufferSize;
+    std::atomic<int> state;
+
+    static BdevCpp::GeneralPool<ReadFuturePolling, BdevCpp::ClassAlloc<ReadFuturePolling>> readFuturePollingPool;
+};
+
+class WriteFuturePolling: public FutureBase {
+friend class Api;
+friend class AsyncApi;
+friend class ClassAlloc<WriteFuturePolling>;
+
+  private:
+    WriteFuturePolling(size_t _dataSize = 0);
+    virtual ~WriteFuturePolling();
+
+  public:
+    int get(char *&data, size_t &_dataSize, unsigned int _timeoutMsec = 100);
+    void signal(Status status, const char *data, size_t _dataSize);
+    char *getData() {
+        return 0;
+    }
+    size_t getDataSize() {
+        return dataSize;
+    }
+    void setBuffer(char *_buffer) {}
+    void setBufferSize(size_t _bufferSize) {}
+    void setDataSize(size_t _dataSize) {
+        dataSize = _dataSize;
+    }
+    void sink();
+    void reset() {
+        state = 0;
+    }
+
+  private:
+    size_t dataSize;
+    std::atomic<int> state;
+
+    static BdevCpp::GeneralPool<WriteFuturePolling, BdevCpp::ClassAlloc<WriteFuturePolling>> writeFuturePollingPool;
 };
 
 } // namespace BdevCpp

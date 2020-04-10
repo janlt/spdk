@@ -202,6 +202,7 @@ static int AsyncIoCompleteWrites(BdevCpp::AsyncApi *api,
             rc = -1;
             break;
         }
+        write_futures[i]->sink();
 
         write_ios++;
         bytes_written += dataSize;
@@ -239,6 +240,7 @@ static int AsyncIoCompleteReads(BdevCpp::AsyncApi *api,
             rc = -1;
             break;
         }
+        read_futures[i]->sink();
     }
     num_read_futures = 0;
 

@@ -39,8 +39,8 @@ class SyncApi : public ApiBase {
     off_t lseek(int fd, off_t offset, int whence);
     int fsync(int desc);
 
-    FutureBase *read(int desc, uint64_t pos, char *buffer, size_t bufferSize);
-    FutureBase *write(int desc, uint64_t pos, const char *data, size_t dataSize);
+    FutureBase *read(int desc, uint64_t pos, char *buffer, size_t bufferSize, bool polling = true);
+    FutureBase *write(int desc, uint64_t pos, const char *data, size_t dataSize, bool polling = true);
 };
 
 } // namespace BdevCpp

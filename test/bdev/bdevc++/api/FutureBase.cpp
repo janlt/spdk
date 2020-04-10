@@ -37,6 +37,4 @@ FutureBase::FutureBase()
 
 FutureBase::~FutureBase() {}
 
-
-
 } // namespace BdevCpp

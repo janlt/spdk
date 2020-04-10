@@ -179,11 +179,11 @@ int SyncApi::fsync(int desc) {
     return 0;
 }
 
-FutureBase *SyncApi::read(int desc, uint64_t pos, char *buffer, size_t bufferSize) {
+FutureBase *SyncApi::read(int desc, uint64_t pos, char *buffer, size_t bufferSize, bool polling) {
     return 0;
 }
 
-FutureBase *SyncApi::write(int desc, uint64_t pos, const char *data, size_t dataSize) {
+FutureBase *SyncApi::write(int desc, uint64_t pos, const char *data, size_t dataSize, bool polling) {
     return 0;
 }
 

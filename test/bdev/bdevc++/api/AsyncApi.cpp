@@ -122,15 +122,19 @@ int AsyncApi::fsync(int desc) {
     return 0;
 }
 
-FutureBase *AsyncApi::read(int desc, uint64_t pos, char *buffer, size_t bufferSize) {
+FutureBase *AsyncApi::read(int desc, uint64_t pos, char *buffer, size_t bufferSize, bool polling) {
     uint64_t lba;
     uint8_t lun;
     if (getIoPosLinear(desc, pos, lba, lun) < 0)
         return 0;
 
-    ReadFuture *rfut = ReadFuture::readFuturePool.get();
-    rfut->buffer = buffer;
-    rfut->bufferSize = bufferSize;
+    FutureBase *rfut;
+    if (polling == true)
+        rfut = ReadFuturePolling::readFuturePollingPool.get();
+    else
+        rfut = ReadFuture::readFuturePool.get();
+    rfut->setBuffer(buffer);
+    rfut->setBufferSize(bufferSize);
 
     IoRqst *getRqst = IoRqst::readPool.get();
     getRqst->finalizeRead(nullptr, bufferSize,
@@ -142,21 +146,25 @@ FutureBase *AsyncApi::read(int desc, uint64_t pos, char *buffer, size_t bufferSi
 
     if (spio->enqueue(getRqst) == false) {
         IoRqst::readPool.put(getRqst);
-        ReadFuture::readFuturePool.put(rfut);
+        rfut->sink();
         return 0;
     }
 
     return rfut;
 }
 
-FutureBase *AsyncApi::write(int desc, uint64_t pos, const char *data, size_t dataSize) {
+FutureBase *AsyncApi::write(int desc, uint64_t pos, const char *data, size_t dataSize, bool polling) {
     uint64_t lba;
     uint8_t lun;
     if (getIoPosLinear(desc, pos, lba, lun) < 0)
         return 0;
 
-    WriteFuture *wfut = WriteFuture::writeFuturePool.get();
-    wfut->dataSize = dataSize;
+    FutureBase *wfut;
+    if (polling == true)
+        wfut = WriteFuturePolling::writeFuturePollingPool.get();
+    else
+        wfut = WriteFuture::writeFuturePool.get();
+    wfut->setDataSize(dataSize);
 
     IoRqst *writeRqst = IoRqst::writePool.get();
     writeRqst->finalizeWrite(data, dataSize,
@@ -168,7 +176,7 @@ FutureBase *AsyncApi::write(int desc, uint64_t pos, const char *data, size_t dat
 
     if (spio->enqueue(writeRqst) == false) {
         IoRqst::writePool.put(writeRqst);
-        WriteFuture::writeFuturePool.put(wfut);
+        wfut->sink();
         return 0;
     }
 

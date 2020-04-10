@@ -23,21 +23,25 @@ friend class Api;
 friend class AsyncApi;
 friend class ReadFuture;
 friend class WriteFuture;
+friend class ReadFuturePolling;
+friend class WriteFuturePolling;
 
   private:
     FutureBase();
     virtual ~FutureBase();
 
-  protected:
+  public:
     virtual int get(char *&data, size_t &_dataSize, unsigned int _timeoutMsec = 100) = 0;
     virtual void signal(Status status, const char *data, size_t _dataSize) = 0;
     virtual char *getData() = 0;
     virtual size_t getDataSize() = 0;
+    virtual void setBuffer(char *_buffer) = 0;
+    virtual void setBufferSize(size_t _bufferSize) = 0;
+    virtual void setDataSize(size_t _dataSize) = 0;
     virtual void sink() = 0;
+    virtual void reset() = 0;
 
   protected:
-    std::mutex mtx;
-    std::condition_variable cv;
     int opStatus;
 };
 

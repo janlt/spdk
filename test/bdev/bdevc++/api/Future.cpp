@@ -66,6 +66,7 @@ void ReadFuture::signal(Status status, const char *data, size_t _dataSize) {
 }
 
 void ReadFuture::sink() {
+    reset();
     ReadFuture::readFuturePool.put(this);
 }
 
@@ -95,7 +96,68 @@ void WriteFuture::signal(Status status, const char *data, size_t _dataSize) {
 }
 
 void WriteFuture::sink() {
+    reset();
     WriteFuture::writeFuturePool.put(this);
+}
+
+
+
+
+GeneralPool<ReadFuturePolling, ClassAlloc<ReadFuturePolling>> ReadFuturePolling::readFuturePollingPool(100, "readFuturePollingPool");
+GeneralPool<WriteFuturePolling, ClassAlloc<WriteFuturePolling>> WriteFuturePolling::writeFuturePollingPool(100, "writeFuturePollingPool");
+
+ReadFuturePolling::ReadFuturePolling(char *_buffer, size_t _bufferSize)
+    : buffer(_buffer), bufferSize(_bufferSize), state(0) {}
+
+ReadFuturePolling::~ReadFuturePolling() {}
+
+int ReadFuturePolling::get(char *&data, size_t &_dataSize, unsigned int _timeoutMsec) {
+    while (!state) ;
+    if (opStatus)
+        return -1;
+
+    data = buffer;
+    _dataSize = bufferSize;
+    return opStatus;
+}
+
+void ReadFuturePolling::signal(Status status, const char *data, size_t _dataSize) {
+    state = 1;
+    opStatus = (status.ok() == true) ? 0 : -1;
+    if (!opStatus)
+        ::memcpy(buffer, data, _dataSize);
+}
+
+void ReadFuturePolling::sink() {
+    reset();
+    ReadFuturePolling::readFuturePollingPool.put(this);
+}
+
+
+
+WriteFuturePolling::WriteFuturePolling(size_t _dataSize)
+    : dataSize(_dataSize), state(0) {}
+
+WriteFuturePolling::~WriteFuturePolling() {}
+
+int WriteFuturePolling::get(char *&data, size_t &_dataSize, unsigned int _timeoutMsec) {
+    while (!state) ;
+    if (opStatus)
+        return -1;
+
+    _dataSize = dataSize;
+    return opStatus;
+}
+
+void WriteFuturePolling::signal(Status status, const char *data, size_t _dataSize) {
+    state = 1;
+    dataSize = _dataSize;
+    opStatus = (status.ok() == true) ? 0 : -1;
+}
+
+void WriteFuturePolling::sink() {
+    reset();
+    WriteFuturePolling::writeFuturePollingPool.put(this);
 }
 
 } // namespace BdevCpp

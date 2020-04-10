@@ -40,8 +40,8 @@ class ApiBase {
     virtual off_t lseek(int fd, off_t offset, int whence) = 0;
     virtual int fsync(int desc) = 0;
 
-    virtual FutureBase *read(int desc, uint64_t pos, char *buffer, size_t bufferSize) = 0;
-    virtual FutureBase *write(int desc, uint64_t pos, const char *data, size_t dataSize) = 0;
+    virtual FutureBase *read(int desc, uint64_t pos, char *buffer, size_t bufferSize, bool polling = true) = 0;
+    virtual FutureBase *write(int desc, uint64_t pos, const char *data, size_t dataSize, bool polling = true) = 0;
 
     BdevGeom *storageGeom;
     FileEmu *femu;
