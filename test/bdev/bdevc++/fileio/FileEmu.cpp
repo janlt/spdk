@@ -83,9 +83,9 @@ int FileEmu::adjustPos(int64_t delta) {
     pos.pos += delta;
     int64_t deltaLbas;
     if (delta > 0)
-        deltaLbas = delta/geom.optLbaSize + 1;
+        deltaLbas = !(delta%geom.optLbaSize) ? delta/geom.optLbaSize : delta/geom.optLbaSize + 1;
     else if (delta < 0)
-        deltaLbas = delta/geom.optLbaSize - 1;
+        deltaLbas = !(delta%geom.optLbaSize) ? delta/geom.optLbaSize : delta/geom.optLbaSize - 1;
     else
         deltaLbas = 0;
     if (pos.posLba + deltaLbas > geom.endLba) {

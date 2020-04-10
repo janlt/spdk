@@ -89,15 +89,14 @@ int AsyncApi::getIoPosLinear(int desc, uint64_t &lba, uint8_t &lun) {
 int AsyncApi::getIoPosLinear(int desc, uint64_t pos, uint64_t &lba, uint8_t &lun) {
     FilePos &apos = femu->pos;
     apos.pos = pos;
-    int64_t deltaLbas = 0;
-    if (pos > 0)
-        deltaLbas = pos/femu->geom.optLbaSize + 1;
+    int64_t deltaLbas = !(apos.pos%femu->geom.optLbaSize) ? apos.pos%femu->geom.optLbaSize : apos.pos%femu->geom.optLbaSize + 1;
     if (apos.posLba + deltaLbas > femu->geom.endLba) {
         apos.posLun++;
         apos.posLun %= femu->geom.numLuns;
         apos.posLba = femu->geom.startLba;
-    }
-    lba = apos.posLba + femu->geom.startLba;
+    } else
+        lba = apos.posLba + femu->geom.startLba + deltaLbas;
+    lba *= femu->geom.blocksPerOptIo;
     lun = apos.posLun;
     return 0;
 }
