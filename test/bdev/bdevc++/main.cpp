@@ -81,12 +81,22 @@ static time_t printTimeNow(const char *msg) {
     return now;
 }
 
+static size_t calcIoSize(size_t blkSize, size_t idx, size_t min_mult, size_t max_mult) {
+    size_t m = idx;
+    if (idx < min_mult)
+        m = min_mult;
+    if (idx > max_mult)
+        m = max_mult;
+    return  blkSize * m;
+}
+
 static char io_buf[2500000];
 static char io_cmp_buf[2500000];
 
 static int SyncIoTest(BdevCpp::SyncApi *api,
         const char *file_name, int mode, int check,
-        int loop_count, int out_loop_count) {
+        int loop_count, int out_loop_count, 
+        size_t max_iosize_mult, size_t min_iosize_mult) {
     int rc = 0;
 
     int fd = !mode ? api->open(file_name, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR | O_SYNC | O_DIRECT) : 
@@ -105,7 +115,7 @@ static int SyncIoTest(BdevCpp::SyncApi *api,
 
     for (int j = 0 ; j < out_loop_count ; j++) {
         for (int i = 0 ; i < loop_count ; i++) {
-            size_t io_size = 4096*(i%8);
+            size_t io_size = calcIoSize(4096, i, min_iosize_mult, max_iosize_mult);
             ::memset(io_buf, 'a' + i%20, io_size);
             rc = !mode ? api->write(fd, io_buf, io_size) : ::write(fd, io_buf, io_size);
             if (rc < 0) {
@@ -131,7 +141,7 @@ static int SyncIoTest(BdevCpp::SyncApi *api,
             }
 
             for (int i = 0 ; i < loop_count ; i++) {
-                size_t io_size = 4096*(i%8);
+                size_t io_size = calcIoSize(4096, i, min_iosize_mult, max_iosize_mult);
                 ::memset(io_cmp_buf, 'a' + i%20, io_size);
 
                 rc = !mode ? api->read(fd, io_buf, io_size) : ::read(fd, io_buf, io_size);
@@ -260,7 +270,8 @@ static int AsyncIoCompleteReads(BdevCpp::AsyncApi *api,
 
 static int AsyncIoTest(BdevCpp::AsyncApi *api,
         const char *file_name, int check,
-        int loop_count, int out_loop_count, size_t max_queued) {
+        int loop_count, int out_loop_count, 
+        size_t max_iosize_mult, size_t min_iosize_mult, size_t max_queued) {
     int rc = 0;
 
     int fd = api->open(file_name, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR | O_SYNC | O_DIRECT);
@@ -286,7 +297,7 @@ static int AsyncIoTest(BdevCpp::AsyncApi *api,
     for (int j = 0 ; j < out_loop_count ; j++) {
         check_pos = pos;
         for (int i = 0 ; i < loop_count ; i++) {
-            size_t io_size = 4096*(i%8);
+            size_t io_size = calcIoSize(4096, i, min_iosize_mult, max_iosize_mult);
             ::memset(io_buffers[num_write_futures], 'a' + i%20, io_size);
 
             write_futures[num_write_futures] = api->write(fd, pos, io_buffers[num_write_futures], io_size);
@@ -308,7 +319,7 @@ static int AsyncIoTest(BdevCpp::AsyncApi *api,
 
         if (!rc && check) {
             for (int i = 0 ; i < loop_count ; i++) {
-                size_t io_size = 4096*(i%8);
+                size_t io_size = calcIoSize(4096, i, min_iosize_mult, max_iosize_mult);
                 ::memset(io_cmp_buffers[num_read_futures], 'a' + i%20, io_size);
                 io_sizes[num_read_futures] = io_size;
 
@@ -367,6 +378,8 @@ static void usage(const char *prog)
         "  -m, --loop-count               Inner IO loop count (10 - default)\n"
         "  -n, --outer-loop-count         Outer IO loop count (10 - default)\n"
         "  -q, --max-queued               Max queued async IOs (10 - default)\n"
+        "  -z, --max-iosize-mult          Max IO size 4096 multiplier (8 - default)\n"
+        "  -w, --min-iosize-mult          Min IO size 4096 multiplier (1 - default)\n"
         "  -l, --legacy-newstack-mode     Use legacy (1) or new stack (0 - default) file IO routines\n"
         "  -i, --integrity-check          Run integrity check (false - default)\n"
         "  -O, --open-close-test          Run open/clsoe test\n"
@@ -383,6 +396,8 @@ static int mainGetopt(int argc, char *argv[],
         int &loop_count,
         int &out_loop_count,
         size_t &max_queued,
+        size_t &max_iosize_mult,
+        size_t &min_iosize_mult,
         int &legacy_newstack_mode,
         bool &integrity_check,
         bool &open_close_test,
@@ -394,7 +409,7 @@ static int mainGetopt(int argc, char *argv[],
     int ret = -1;
 
     while (1) {
-        static char short_options[] = "c:s:a:m:n:l:i:q:dhOSA";
+        static char short_options[] = "c:s:a:m:n:l:i:z:w:q:dhOSA";
         static struct option long_options[] = {
             {"spdk-conf",               1, 0, 'c'},
             {"sync-file",               1, 0, 's'},
@@ -404,6 +419,8 @@ static int mainGetopt(int argc, char *argv[],
             {"legacy-newstack-mode",    1, 0, 'l'},
             {"integrity-check",         1, 0, 'i'},
             {"max-queued",              1, 0, 'q'},
+            {"max-iosize-mult",         1, 0, 'z'},
+            {"min-iosize-mult",         1, 0, 'z'},
             {"open-close-test",         0, 0, 'O'},
             {"sync-test",               0, 0, 'S'},
             {"async-test",              0, 0, 'A'},
@@ -441,6 +458,14 @@ static int mainGetopt(int argc, char *argv[],
 
         case 'q':
             max_queued = static_cast<size_t>(atoi(optarg));
+            break;
+
+        case 'z':
+            max_iosize_mult = static_cast<size_t>(atoi(optarg));
+            break;
+
+        case 'w':
+            min_iosize_mult = static_cast<size_t>(atoi(optarg));
             break;
 
         case 'l':
@@ -490,6 +515,8 @@ int main(int argc, char **argv) {
     int loop_count = 10;
     int out_loop_count = 10;
     size_t max_queued = maxWriteFutures - 2;
+    size_t max_iosize_mult = 8;
+    size_t min_iosize_mult = 1;
     const char *sync_file_name = "testsync";
     string sync_file(sync_file_name);
     const char *async_file_name = "testasync";
@@ -508,6 +535,8 @@ int main(int argc, char **argv) {
             loop_count,
             out_loop_count,
             max_queued,
+            max_iosize_mult,
+            min_iosize_mult,
             legacy_newstack_mode,
             integrity_check,
             open_close_test,
@@ -553,14 +582,26 @@ int main(int argc, char **argv) {
         }
     }
 
+    if (max_iosize_mult > 8)
+        max_iosize_mult = 8;
+
+    if (min_iosize_mult < 1)
+        min_iosize_mult = 1;
+
     if (sync_test == true) {
-        rc = SyncIoTest(syncApi, sync_file.c_str(), legacy_newstack_mode, integrity_check, loop_count, out_loop_count);
+        rc = SyncIoTest(syncApi, sync_file.c_str(), 
+            legacy_newstack_mode, integrity_check, 
+            loop_count, out_loop_count, 
+            max_iosize_mult,
+            min_iosize_mult);
         if (rc)
             cerr << "SyncIoTest failed rc: " << rc << endl;
     }
 
     if (async_test == true) {
-        rc = AsyncIoTest(asyncApi, async_file.c_str(), integrity_check, loop_count, out_loop_count, max_queued);
+        rc = AsyncIoTest(asyncApi, async_file.c_str(), 
+            integrity_check, loop_count, out_loop_count, 
+            max_iosize_mult, min_iosize_mult, max_queued);
         if (rc)
             cerr << "AsyncIoTest failed rc: " << rc << endl;
     }
