@@ -73,11 +73,12 @@ static int AsyncOpenCloseTest(BdevCpp::AsyncApi *api, const char *file_name) {
     return rc;
 }
 
-static void printTimeNow(const char *msg) {
+static time_t printTimeNow(const char *msg) {
     char time_buf[128];
     time_t now = time(0);
     strftime(time_buf, sizeof(time_buf), "%Y-%m-%d %H:%M:%S.000", localtime(&now));
     cout << msg << " " << time_buf << endl;
+    return now;
 }
 
 static char io_buf[2500000];
@@ -95,7 +96,7 @@ static int SyncIoTest(BdevCpp::SyncApi *api,
         return -1;
     }
 
-    printTimeNow("Start sync test ");
+    time_t stime = printTimeNow("Start sync test ");
 
     uint64_t bytes_written = 0;
     uint64_t bytes_read = 0;
@@ -104,7 +105,7 @@ static int SyncIoTest(BdevCpp::SyncApi *api,
 
     for (int j = 0 ; j < out_loop_count ; j++) {
         for (int i = 0 ; i < loop_count ; i++) {
-            size_t io_size = 512*(2*(i%20) + 1);
+            size_t io_size = 4096*(i%8);
             ::memset(io_buf, 'a' + i%20, io_size);
             rc = !mode ? api->write(fd, io_buf, io_size) : ::write(fd, io_buf, io_size);
             if (rc < 0) {
@@ -130,7 +131,7 @@ static int SyncIoTest(BdevCpp::SyncApi *api,
             }
 
             for (int i = 0 ; i < loop_count ; i++) {
-                size_t io_size = 512*(2*(i%20) + 1);
+                size_t io_size = 4096*(i%8);
                 ::memset(io_cmp_buf, 'a' + i%20, io_size);
 
                 rc = !mode ? api->read(fd, io_buf, io_size) : ::read(fd, io_buf, io_size);
@@ -157,10 +158,20 @@ static int SyncIoTest(BdevCpp::SyncApi *api,
         }
     }
 
-    printTimeNow("End sync test ");
+    time_t etime = printTimeNow("End sync test ");
+    double t_diff = difftime(etime, stime);
+    double write_mbsec = static_cast<double>(bytes_written)/t_diff;
+    write_mbsec /= (1024 * 1024);
+    double read_mbsec = static_cast<double>(bytes_read)/t_diff;
+    read_mbsec /= (1024 * 1024);
+    double write_iops = static_cast<double>(write_ios)/t_diff;
+    double read_iops = static_cast<double>(read_ios)/t_diff;
+
     if (!rc)
-        cout << "bytes_written " << bytes_written << " bytes_read " << bytes_read <<
-            " write_ios " << write_ios << " read_ios " << read_ios << endl;
+        cout << "bytes_written: " << bytes_written << " bytes_read: " << bytes_read <<
+            " write_ios: " << write_ios << " read_ios: " << read_ios << 
+            " write MiB/sec: " << static_cast<float>(write_mbsec) << " read MiB/sec: " << static_cast<float>(read_mbsec) <<
+            " write IOPS: " << static_cast<float>(write_iops) << " read IOPS: " << static_cast<float>(read_iops) << endl;
     else
         cerr << "Sync test failed rc " << rc << endl;
 
@@ -263,7 +274,7 @@ static int AsyncIoTest(BdevCpp::AsyncApi *api,
     for (size_t i = 0 ; i < maxReadFutures ; i++)
         io_cmp_buffers[i] = new char[250000];
 
-    printTimeNow("Start async test ");
+    time_t stime = printTimeNow("Start async test ");
 
     uint64_t bytes_written = 0;
     uint64_t bytes_read = 0;
@@ -320,10 +331,19 @@ static int AsyncIoTest(BdevCpp::AsyncApi *api,
         }
     }
 
-    printTimeNow("End async test");
+    time_t etime = printTimeNow("End async test");
+    double t_diff = difftime(etime, stime);
+    double write_mbsec = static_cast<double>(bytes_written)/t_diff;
+    write_mbsec /= (1024 * 1024);
+    double read_mbsec = static_cast<double>(bytes_read)/t_diff;
+    read_mbsec /= (1024 * 1024);
+    double write_iops = static_cast<double>(write_ios)/t_diff;
+    double read_iops = static_cast<double>(read_ios)/t_diff;
     if (!rc)
-        cout << "bytes_written " << bytes_written << " bytes_read " << bytes_read <<
-            " write_ios " << write_ios << " read_ios " << read_ios << endl;
+        cout << "bytes_written: " << bytes_written << " bytes_read: " << bytes_read <<
+            " write_ios: " << write_ios << " read_ios: " << read_ios << 
+            " write MiB/sec: " << static_cast<float>(write_mbsec) << " read MiB/sec: " << static_cast<float>(read_mbsec) <<
+            " write IOPS: " << static_cast<float>(write_iops) << " read IOPS: " << static_cast<float>(read_iops) << endl;
     else
         cerr << "Test failed rc " << rc << endl;
 
