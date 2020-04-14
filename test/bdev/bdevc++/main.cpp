@@ -193,20 +193,14 @@ static int SyncIoTest(BdevCpp::SyncApi *api,
 //
 // Async IO test
 //
-const size_t maxWriteFutures = 256;
-static BdevCpp::FutureBase *write_futures[maxWriteFutures];
-static size_t num_write_futures = 0;
-const size_t maxReadFutures = 256;
-static BdevCpp::FutureBase *read_futures[maxReadFutures];
-static size_t num_read_futures = 0;
-
-static char *io_buffers[maxWriteFutures];
-static char *io_cmp_buffers[maxReadFutures];
-static size_t io_sizes[maxReadFutures];
+const size_t maxWriteFutures = 64;
+const size_t maxReadFutures = 64;
 
 static int AsyncIoCompleteWrites(BdevCpp::AsyncApi *api,
         size_t &write_ios,
-        size_t &bytes_written) {
+        size_t &bytes_written,
+        size_t &num_write_futures,
+        BdevCpp::FutureBase *write_futures[]) {
     int rc = 0;
 
     size_t curr_idx = num_write_futures;
@@ -235,11 +229,16 @@ static int AsyncIoCompleteWrites(BdevCpp::AsyncApi *api,
 
 static int AsyncIoCompleteReads(BdevCpp::AsyncApi *api,
         size_t &read_ios,
-        size_t &bytes_read) {
+        size_t &bytes_read,
+        size_t &num_read_futures,
+        BdevCpp::FutureBase *read_futures[],
+        char *io_buffers[],
+        char *io_cmp_buffers[],
+        size_t io_sizes[]) {
     int rc = 0;
 
     size_t curr_idx = num_read_futures;
-    for (size_t i ; i < curr_idx ; i++) {
+    for (size_t i = 0 ; i < curr_idx ; i++) {
         char *data;
         size_t dataSize;
 
@@ -272,6 +271,15 @@ static int AsyncIoTest(BdevCpp::AsyncApi *api,
         const char *file_name, int check,
         int loop_count, int out_loop_count, 
         size_t max_iosize_mult, size_t min_iosize_mult, size_t max_queued) {
+    BdevCpp::FutureBase *write_futures[maxWriteFutures];
+    size_t num_write_futures = 0;
+    BdevCpp::FutureBase *read_futures[maxReadFutures];
+    size_t num_read_futures = 0;
+
+    char *io_buffers[maxWriteFutures];
+    char *io_cmp_buffers[maxReadFutures];
+    size_t io_sizes[maxReadFutures];
+
     int rc = 0;
 
     int fd = api->open(file_name, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR | O_SYNC | O_DIRECT);
@@ -305,17 +313,17 @@ static int AsyncIoTest(BdevCpp::AsyncApi *api,
             pos += io_size;
 
             if (!write_futures[num_write_futures - 1]) {
-                rc = AsyncIoCompleteWrites(api, write_ios, bytes_written);
+                rc = AsyncIoCompleteWrites(api, write_ios, bytes_written, num_write_futures, write_futures);
                 if (rc < 0)
                     break;
                 continue;
             }
 
             if (num_write_futures >= max_queued || num_write_futures >= maxWriteFutures)
-                rc = AsyncIoCompleteWrites(api, write_ios, bytes_written);
+                rc = AsyncIoCompleteWrites(api, write_ios, bytes_written, num_write_futures, write_futures);
         }
 
-        rc = AsyncIoCompleteWrites(api, write_ios, bytes_written);
+        rc = AsyncIoCompleteWrites(api, write_ios, bytes_written, num_write_futures, write_futures);
 
         if (!rc && check) {
             for (int i = 0 ; i < loop_count ; i++) {
@@ -328,17 +336,17 @@ static int AsyncIoTest(BdevCpp::AsyncApi *api,
                 check_pos += io_size;
 
                 if (!read_futures[num_read_futures - 1]) {
-                    rc = AsyncIoCompleteReads(api, read_ios, bytes_read);
+                    rc = AsyncIoCompleteReads(api, read_ios, bytes_read, num_read_futures, read_futures, io_buffers, io_cmp_buffers, io_sizes);
                     if (rc < 0)
                         break;
                     continue;
                 }
 
                 if (num_read_futures > max_queued || num_read_futures >= maxReadFutures)
-                    rc = AsyncIoCompleteReads(api, read_ios, bytes_read);
+                    rc = AsyncIoCompleteReads(api, read_ios, bytes_read, num_read_futures, read_futures, io_buffers, io_cmp_buffers, io_sizes);
             }
 
-            rc = AsyncIoCompleteReads(api, read_ios, bytes_read);
+            rc = AsyncIoCompleteReads(api, read_ios, bytes_read, num_read_futures, read_futures, io_buffers, io_cmp_buffers, io_sizes);
         }
     }
 
@@ -587,6 +595,9 @@ int main(int argc, char **argv) {
 
     if (min_iosize_mult < 1)
         min_iosize_mult = 1;
+
+    if (max_queued > maxWriteFutures)
+        max_queued = maxWriteFutures;
 
     if (sync_test == true) {
         rc = SyncIoTest(syncApi, sync_file.c_str(), 
