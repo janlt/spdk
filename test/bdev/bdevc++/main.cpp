@@ -6,6 +6,7 @@
 
 #include <iostream>
 #include <memory>
+#include <thread>
 #include <boost/filesystem.hpp>
 #include <boost/program_options.hpp>
 
@@ -170,6 +171,8 @@ static int SyncIoTest(BdevCpp::SyncApi *api,
 
     time_t etime = printTimeNow("End sync test ");
     double t_diff = difftime(etime, stime);
+    if (!t_diff)
+        t_diff = 1;
     double write_mbsec = static_cast<double>(bytes_written)/t_diff;
     write_mbsec /= (1024 * 1024);
     double read_mbsec = static_cast<double>(bytes_read)/t_diff;
@@ -352,6 +355,8 @@ static int AsyncIoTest(BdevCpp::AsyncApi *api,
 
     time_t etime = printTimeNow("End async test");
     double t_diff = difftime(etime, stime);
+    if (!t_diff)
+        t_diff = 1;
     double write_mbsec = static_cast<double>(bytes_written)/t_diff;
     write_mbsec /= (1024 * 1024);
     double read_mbsec = static_cast<double>(bytes_read)/t_diff;
@@ -366,7 +371,7 @@ static int AsyncIoTest(BdevCpp::AsyncApi *api,
     else
         cerr << "Test failed rc " << rc << endl;
 
-    rc = api->close(fd);
+    //rc = api->close(fd);
 
     for (size_t i = 0 ; i < maxWriteFutures ; i++)
         delete [] io_buffers[i];
@@ -388,6 +393,7 @@ static void usage(const char *prog)
         "  -q, --max-queued               Max queued async IOs (10 - default)\n"
         "  -z, --max-iosize-mult          Max IO size 4096 multiplier (8 - default)\n"
         "  -w, --min-iosize-mult          Min IO size 4096 multiplier (1 - default)\n"
+        "  -t, --num-files                Number of files to write/read concurrently\n"
         "  -l, --legacy-newstack-mode     Use legacy (1) or new stack (0 - default) file IO routines\n"
         "  -i, --integrity-check          Run integrity check (false - default)\n"
         "  -O, --open-close-test          Run open/clsoe test\n"
@@ -406,6 +412,7 @@ static int mainGetopt(int argc, char *argv[],
         size_t &max_queued,
         size_t &max_iosize_mult,
         size_t &min_iosize_mult,
+        size_t &num_files,
         int &legacy_newstack_mode,
         bool &integrity_check,
         bool &open_close_test,
@@ -417,7 +424,7 @@ static int mainGetopt(int argc, char *argv[],
     int ret = -1;
 
     while (1) {
-        static char short_options[] = "c:s:a:m:n:l:i:z:w:q:dhOSA";
+        static char short_options[] = "c:s:a:m:n:l:i:z:t:w:q:dhOSA";
         static struct option long_options[] = {
             {"spdk-conf",               1, 0, 'c'},
             {"sync-file",               1, 0, 's'},
@@ -428,7 +435,8 @@ static int mainGetopt(int argc, char *argv[],
             {"integrity-check",         1, 0, 'i'},
             {"max-queued",              1, 0, 'q'},
             {"max-iosize-mult",         1, 0, 'z'},
-            {"min-iosize-mult",         1, 0, 'z'},
+            {"min-iosize-mult",         1, 0, 'w'},
+            {"num-files",               1, 0, 't'},
             {"open-close-test",         0, 0, 'O'},
             {"sync-test",               0, 0, 'S'},
             {"async-test",              0, 0, 'A'},
@@ -470,6 +478,10 @@ static int mainGetopt(int argc, char *argv[],
 
         case 'z':
             max_iosize_mult = static_cast<size_t>(atoi(optarg));
+            break;
+
+        case 't':
+            num_files = static_cast<size_t>(atoi(optarg));
             break;
 
         case 'w':
@@ -514,6 +526,25 @@ static int mainGetopt(int argc, char *argv[],
     return ret;
 }
 
+struct ThreadArgs {
+    BdevCpp::AsyncApi *api;
+    string file;
+    bool int_check;
+    int l_cnt;
+    int out_l_cnt;
+    size_t max_ios_m; 
+    size_t min_ios_m;
+    size_t m_q;
+    int rc;
+};
+
+static void AsyncIoTestRunner(ThreadArgs *targs) {
+    int rc = AsyncIoTest(targs->api, targs->file.c_str(), 
+        targs->int_check, targs->l_cnt, targs->out_l_cnt, 
+        targs->max_ios_m, targs->min_ios_m, targs->m_q);
+    targs->rc = rc;
+}
+
 int main(int argc, char **argv) {
     int rc = 0;
     BdevCpp::Options options;
@@ -525,6 +556,7 @@ int main(int argc, char **argv) {
     size_t max_queued = maxWriteFutures - 2;
     size_t max_iosize_mult = 8;
     size_t min_iosize_mult = 1;
+    size_t num_files = 1;
     const char *sync_file_name = "testsync";
     string sync_file(sync_file_name);
     const char *async_file_name = "testasync";
@@ -545,6 +577,7 @@ int main(int argc, char **argv) {
             max_queued,
             max_iosize_mult,
             min_iosize_mult,
+            num_files,
             legacy_newstack_mode,
             integrity_check,
             open_close_test,
@@ -599,6 +632,9 @@ int main(int argc, char **argv) {
     if (max_queued > maxWriteFutures)
         max_queued = maxWriteFutures;
 
+    if (num_files > 64)
+        num_files = 64;
+
     if (sync_test == true) {
         rc = SyncIoTest(syncApi, sync_file.c_str(), 
             legacy_newstack_mode, integrity_check, 
@@ -610,11 +646,26 @@ int main(int argc, char **argv) {
     }
 
     if (async_test == true) {
-        rc = AsyncIoTest(asyncApi, async_file.c_str(), 
-            integrity_check, loop_count, out_loop_count, 
-            max_iosize_mult, min_iosize_mult, max_queued);
-        if (rc)
-            cerr << "AsyncIoTest failed rc: " << rc << endl;
+        if (num_files == 1) {
+            rc = AsyncIoTest(asyncApi, async_file.c_str(), 
+                integrity_check, loop_count, out_loop_count, 
+                max_iosize_mult, min_iosize_mult, max_queued);
+            if (rc)
+                cerr << "AsyncIoTest failed rc: " << rc << endl;
+        } else {
+            thread *threads[64];
+            for (size_t i = 0 ; i < num_files ; i++) {
+                string async_f = async_file + to_string(i);
+                ThreadArgs *targs = new ThreadArgs{asyncApi, async_f, integrity_check, 
+                    loop_count, out_loop_count, 
+                    max_iosize_mult, min_iosize_mult, max_queued};
+                threads[i] = new thread(&AsyncIoTestRunner, targs);
+            }
+
+            for (size_t i = 0 ; i < num_files ; i++) {
+                threads[i]->join();
+            }
+        }
     }
 
     api.QuiesceIO(true);
