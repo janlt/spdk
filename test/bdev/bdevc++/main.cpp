@@ -275,7 +275,7 @@ static int AsyncIoTest(BdevCpp::AsyncApi *api,
     for (int j = 0 ; j < out_loop_count ; j++) {
         check_pos = pos;
         for (int i = 0 ; i < loop_count ; i++) {
-            size_t io_size = 512*(2*(i%20) + 1);
+            size_t io_size = 4096*(i%8);
             ::memset(io_buffers[num_write_futures], 'a' + i%20, io_size);
 
             write_futures[num_write_futures] = api->write(fd, pos, io_buffers[num_write_futures], io_size);
@@ -297,7 +297,7 @@ static int AsyncIoTest(BdevCpp::AsyncApi *api,
 
         if (!rc && check) {
             for (int i = 0 ; i < loop_count ; i++) {
-                size_t io_size = 512*(2*(i%20) + 1);
+                size_t io_size = 4096*(i%8);
                 ::memset(io_cmp_buffers[num_read_futures], 'a' + i%20, io_size);
                 io_sizes[num_read_futures] = io_size;
 

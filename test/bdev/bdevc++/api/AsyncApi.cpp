@@ -95,7 +95,7 @@ int AsyncApi::getIoPosLinear(int desc, uint64_t pos, uint64_t &lba, uint8_t &lun
         apos.posLun %= femu->geom.numLuns;
         apos.posLba = femu->geom.startLba;
     } else
-        lba = apos.posLba + femu->geom.startLba + deltaLbas;
+        lba = femu->geom.startLba + deltaLbas;
     lba *= femu->geom.blocksPerOptIo;
     lun = apos.posLun;
     return 0;
@@ -106,6 +106,11 @@ int AsyncApi::getIoPosStriped(int desc, uint64_t &lba, uint8_t &lun) {
 }
 
 int AsyncApi::getIoPosStriped(int desc, uint64_t pos, uint64_t &lba, uint8_t &lun) {
+    FilePos &apos = femu->pos;
+    apos.pos = (pos >> 12);
+    lun = apos.pos%femu->geom.numLuns;
+    lba = apos.pos + femu->geom.startLba; 
+    lba *= 8;
     return 0;
 }
 
@@ -155,7 +160,7 @@ FutureBase *AsyncApi::read(int desc, uint64_t pos, char *buffer, size_t bufferSi
 FutureBase *AsyncApi::write(int desc, uint64_t pos, const char *data, size_t dataSize, bool polling) {
     uint64_t lba;
     uint8_t lun;
-    if (getIoPosLinear(desc, pos, lba, lun) < 0)
+    if (getIoPosStriped(desc, pos, lba, lun) < 0)
         return 0;
 
     FutureBase *wfut;
@@ -165,8 +170,11 @@ FutureBase *AsyncApi::write(int desc, uint64_t pos, const char *data, size_t dat
         wfut = WriteFuture::writeFuturePool.get();
     wfut->setDataSize(dataSize);
 
+    size_t nds = !(dataSize%4096) ? dataSize/4096 : dataSize/4096 + 1;
+    nds *= 4096;
+
     IoRqst *writeRqst = IoRqst::writePool.get();
-    writeRqst->finalizeWrite(data, dataSize,
+    writeRqst->finalizeWrite(data, nds/*dataSize*/,
         [wfut](StatusCode status,
                 const char *data, size_t dataSize) {
             wfut->signal(status, data, dataSize);
