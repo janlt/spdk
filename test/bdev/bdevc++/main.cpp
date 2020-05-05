@@ -396,7 +396,7 @@ static void usage(const char *prog)
         "  -a, --async-file               Async file name (testasync - default)\n"
         "  -m, --loop-count               Inner IO loop count (10 - default)\n"
         "  -n, --outer-loop-count         Outer IO loop count (10 - default)\n"
-        "  -q, --max-queued               Max queued async IOs (10 - default)\n"
+        "  -q, --max-queued               Max queued async IOs (8 - default)\n"
         "  -z, --max-iosize-mult          Max IO size 4096 multiplier (8 - default)\n"
         "  -w, --min-iosize-mult          Min IO size 4096 multiplier (1 - default)\n"
         "  -t, --num-files                Number of files to write/read concurrently\n"
