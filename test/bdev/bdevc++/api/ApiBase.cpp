@@ -65,12 +65,10 @@
 namespace BdevCpp {
 
 int ApiBase::open(const char *name, int flags, mode_t mode) {
-    femu = new FileEmu(name, flags, mode);
+    FileEmu *femu = new FileEmu(name, flags, mode);
     if (femu->desc < 0)
         return -1;
-
-    FileMap &map = FileMap::getInstance();
-    if (map.putFile(femu, storageGeom->blk_num[0], storageGeom->dev_num) < 0) {
+    if (FileMap::getInstance().putFile(femu, storageGeom->blk_num[0], storageGeom->dev_num) < 0) {
         delete femu;
         return -1;
     }
@@ -78,12 +76,18 @@ int ApiBase::open(const char *name, int flags, mode_t mode) {
 }
 
 int ApiBase::close(int desc) {
+    FileEmu *femu = FileMap::getInstance().getFile(desc);
+    if (!femu)
+        return -1;
     int fd = femu->fd;
     FileMap::getInstance().closeFile(desc);
     return ::close(fd);
 }
 
 off_t ApiBase::lseek(int desc, off_t offset, int whence) {
+    FileEmu *femu = FileMap::getInstance().getFile(desc);
+    if (!femu)
+        return -1;
     return femu->lseek(offset, whence);
 }
 
