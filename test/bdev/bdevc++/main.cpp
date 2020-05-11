@@ -94,7 +94,7 @@ static size_t calcIoSize(size_t blkSize, size_t idx, size_t min_mult, size_t max
 static char io_buf[2500000];
 static char io_cmp_buf[2500000];
 
-static int SyncIoTest(BdevCpp::SyncApi *api,
+static int SyncWriteIoTest(BdevCpp::SyncApi *api,
         const char *file_name, int mode, int check,
         int loop_count, int out_loop_count, 
         size_t max_iosize_mult, size_t min_iosize_mult) {
@@ -270,7 +270,7 @@ static int AsyncIoCompleteReads(BdevCpp::AsyncApi *api,
     return rc;
 }
 
-static int AsyncIoTest(BdevCpp::AsyncApi *api,
+static int AsyncWriteIoTest(BdevCpp::AsyncApi *api,
         const char *file_name, int check,
         int loop_count, int out_loop_count, 
         size_t max_iosize_mult, size_t min_iosize_mult, size_t max_queued) {
@@ -399,9 +399,16 @@ static void usage(const char *prog)
         "  -O, --open-close-test          Run open/clsoe test\n"
         "  -S, --sync-test                Run IO sync test\n"
         "  -A, --async-test               Run IO async test\n"
+        "  -R, --read-test                Run read test\n"
+        "  -W, --write-test               Run write test (default)\n"
         "  -d, --debug                    Debug on (false - default)\n"
         "  -h, --help                     Print this help\n" << prog << endl;
 }
+
+typedef enum _eTestType {
+    eWriteTest = 0,
+    eReadTest  = 1
+} eTestType;
 
 static int mainGetopt(int argc, char *argv[],
         string &spdk_conf,
@@ -418,13 +425,14 @@ static int mainGetopt(int argc, char *argv[],
         bool &open_close_test,
         bool &sync_test,
         bool &async_test,
+        eTestType &write_read,
         bool &debug)
 {
     int c = 0;
     int ret = -1;
 
     while (1) {
-        static char short_options[] = "c:s:a:m:n:l:i:z:t:w:q:dhOSA";
+        static char short_options[] = "c:s:a:m:n:l:i:z:t:w:q:dhOSARW";
         static struct option long_options[] = {
             {"spdk-conf",               1, 0, 'c'},
             {"sync-file",               1, 0, 's'},
@@ -440,6 +448,8 @@ static int mainGetopt(int argc, char *argv[],
             {"open-close-test",         0, 0, 'O'},
             {"sync-test",               0, 0, 'S'},
             {"async-test",              0, 0, 'A'},
+            {"read-test",               0, 0, 'R'},
+            {"write-test",              0, 0, 'W'},
             {"debug",                   0, 0, 'd'},
             {"help",                    0, 0, 'h'},
             {0, 0, 0, 0}
@@ -497,15 +507,23 @@ static int mainGetopt(int argc, char *argv[],
             break;
 
         case 'O':
-            open_close_test = true;;
+            open_close_test = true;
             break;
 
         case 'S':
-            sync_test = true;;
+            sync_test = true;
             break;
 
         case 'A':
-            async_test = true;;
+            async_test = true;
+            break;
+
+        case 'W':
+            write_read = eWriteTest;
+            break;
+
+        case 'R':
+            write_read = eReadTest;
             break;
 
         case 'd':
@@ -563,6 +581,7 @@ int main(int argc, char **argv) {
     string async_file(async_file_name);
     int legacy_newstack_mode = 0;
     bool integrity_check = false;
+    eTestType write_read = eWriteTest;
 
     bool open_close_test = false;
     bool sync_test = false;
@@ -583,6 +602,7 @@ int main(int argc, char **argv) {
             open_close_test,
             sync_test,
             async_test,
+            write_read,
             debug);
     if (ret) {
         usage(argv[0]);
@@ -635,35 +655,60 @@ int main(int argc, char **argv) {
     if (num_files > 64)
         num_files = 64;
 
-    if (sync_test == true) {
-        rc = SyncIoTest(syncApi, sync_file.c_str(), 
-            legacy_newstack_mode, integrity_check, 
-            loop_count, out_loop_count, 
-            max_iosize_mult,
-            min_iosize_mult);
-        if (rc)
-            cerr << "SyncIoTest failed rc: " << rc << endl;
-    }
-
-    if (async_test == true) {
-        if (num_files == 1) {
-            rc = AsyncIoTest(asyncApi, async_file.c_str(), 
-                integrity_check, loop_count, out_loop_count, 
-                max_iosize_mult, min_iosize_mult, max_queued);
+    if (write_read == eWriteTest) {
+        if (sync_test == true) {
+            rc = SyncWriteIoTest(syncApi, sync_file.c_str(),
+                legacy_newstack_mode, integrity_check,
+                loop_count, out_loop_count,
+                max_iosize_mult,
+                min_iosize_mult);
             if (rc)
-                cerr << "AsyncIoTest failed rc: " << rc << endl;
-        } else {
-            thread *threads[64];
-            for (size_t i = 0 ; i < num_files ; i++) {
-                string async_f = async_file + to_string(i);
-                ThreadArgs *targs = new ThreadArgs{asyncApi, async_f, integrity_check, 
-                    loop_count, out_loop_count, 
-                    max_iosize_mult, min_iosize_mult, max_queued};
-                threads[i] = new thread(&AsyncIoTestRunner, targs);
-            }
+                cerr << "SyncWriteIoTest failed rc: " << rc << endl;
+        }
 
-            for (size_t i = 0 ; i < num_files ; i++) {
-                threads[i]->join();
+        if (async_test == true) {
+            if (num_files == 1) {
+                rc = AsyncWriteIoTest(asyncApi, async_file.c_str(),
+                    integrity_check, loop_count, out_loop_count,
+                    max_iosize_mult, min_iosize_mult, max_queued);
+                if (rc)
+                    cerr << "AsyncWriteIoTest failed rc: " << rc << endl;
+            } else {
+                thread *threads[64];
+                for (size_t i = 0 ; i < num_files ; i++) {
+                    string async_f = async_file + to_string(i);
+                    ThreadArgs *targs = new ThreadArgs{asyncApi, async_f, integrity_check,
+                        loop_count, out_loop_count,
+                        max_iosize_mult, min_iosize_mult, max_queued};
+                    threads[i] = new thread(&AsyncWriteIoTestRunner, targs);
+                }
+
+                for (size_t i = 0 ; i < num_files ; i++) {
+                    threads[i]->join();
+                }
+            }
+        }
+    } else {
+        if (async_test == true) {
+            if (num_files == 1) {
+                rc = AsyncReadIoTest(asyncApi, async_file.c_str(),
+                    integrity_check, loop_count, out_loop_count,
+                    max_iosize_mult, min_iosize_mult, max_queued);
+                if (rc)
+                    cerr << "AsyncReadIoTest failed rc: " << rc << endl;
+            } else {
+                thread *threads[64];
+                for (size_t i = 0 ; i < num_files ; i++) {
+                    string async_f = async_file + to_string(i);
+                    ThreadArgs *targs = new ThreadArgs{asyncApi, async_f, integrity_check,
+                        loop_count, out_loop_count,
+                        max_iosize_mult, min_iosize_mult, max_queued};
+                    threads[i] = new thread(&AsyncReadIoTestRunner, targs);
+                }
+
+                for (size_t i = 0 ; i < num_files ; i++) {
+                    threads[i]->join();
+                }
             }
         }
     }
