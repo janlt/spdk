@@ -23,7 +23,7 @@ class FileEmu;
 class ApiBase {
   public:
     ApiBase()
-        : storageGeom(0) {}
+        : storageGeom(0), femu(0) {}
     virtual ~ApiBase() = default;
 
   protected:
@@ -44,6 +44,7 @@ class ApiBase {
     virtual FutureBase *write(int desc, uint64_t pos, const char *data, size_t dataSize, bool polling = true) = 0;
 
     BdevGeom *storageGeom;
+    FileEmu *femu;
 };
 
 } // namespace BdevCpp

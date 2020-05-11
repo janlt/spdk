@@ -84,9 +84,6 @@ off_t SyncApi::lseek(int fd, off_t offset, int whence) {
 }
 
 int SyncApi::getIoPosLinear(int desc, uint64_t &lba, uint8_t &lun) {
-    FileEmu *femu = FileMap::getInstance().getFile(desc);
-    if (!femu)
-        return -1;
     lba = (femu->pos.posLba + femu->geom.startLba)*femu->geom.blocksPerOptIo;
     lun = femu->pos.posLun;
     return 0;

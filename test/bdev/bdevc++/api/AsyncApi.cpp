@@ -87,9 +87,6 @@ int AsyncApi::getIoPosLinear(int desc, uint64_t &lba, uint8_t &lun) {
 }
 
 int AsyncApi::getIoPosLinear(int desc, uint64_t pos, uint64_t &lba, uint8_t &lun) {
-    FileEmu *femu = FileMap::getInstance().getFile(desc);
-    if (!femu)
-        return -1;
     FilePos &apos = femu->pos;
     apos.pos = pos;
     int64_t deltaLbas = !(apos.pos%femu->geom.optLbaSize) ? apos.pos%femu->geom.optLbaSize : apos.pos%femu->geom.optLbaSize + 1;
@@ -109,9 +106,6 @@ int AsyncApi::getIoPosStriped(int desc, uint64_t &lba, uint8_t &lun) {
 }
 
 int AsyncApi::getIoPosStriped(int desc, uint64_t pos, uint64_t &lba, uint8_t &lun) {
-    FileEmu *femu = FileMap::getInstance().getFile(desc);
-    if (!femu)
-        return -1;
     FilePos &apos = femu->pos;
     apos.pos = (pos >> 12);
     lun = apos.pos%femu->geom.numLuns;
