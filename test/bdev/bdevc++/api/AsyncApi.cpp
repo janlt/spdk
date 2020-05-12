@@ -135,7 +135,7 @@ int AsyncApi::fsync(int desc) {
 FutureBase *AsyncApi::read(int desc, uint64_t pos, char *buffer, size_t bufferSize, bool polling) {
     uint64_t lba;
     uint8_t lun;
-    if (getIoPosLinear(desc, pos, lba, lun) < 0)
+    if (getIoPosStriped(desc, pos, lba, lun) < 0)
         return 0;
 
     FutureBase *rfut;

@@ -66,7 +66,7 @@ SpdkCore::SpdkCore(IoOptions _ioOptions)
     bool conf_file_ok = createConfFile();
 
     spBdev = SpdkBdevFactory::getBdev(ioOptions.devType);
-    spBdev->enableStats(true);
+    spBdev->enableStats(false);
 
     if (conf_file_ok == false) {
         if (spdkEnvInit() == false)
