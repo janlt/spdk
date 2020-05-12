@@ -134,7 +134,8 @@ static int SyncWriteIoTest(BdevCpp::SyncApi *api,
     for (int j = 0 ; j < out_loop_count ; j++) {
         for (int i = 0 ; i < loop_count ; i++) {
             size_t io_size = calcIoSize(4096, i, min_iosize_mult, max_iosize_mult);
-            ::memset(io_buf, 'a' + i%20, io_size);
+            if (check)
+                ::memset(io_buf, 'a' + i%20, io_size);
             rc = !mode ? api->write(fd, io_buf, io_size) : ::write(fd, io_buf, io_size);
             if (rc < 0) {
                 cerr << "write sync failed rc: " << rc << " errno: " << errno << endl;
@@ -228,7 +229,6 @@ static int SyncReadIoTest(BdevCpp::SyncApi *api,
     for (int j = 0 ; j < out_loop_count ; j++) {
         for (int i = 0 ; i < loop_count ; i++) {
             size_t io_size = calcIoSize(4096, i, min_iosize_mult, max_iosize_mult);
-            ::memset(io_buf, 'a' + i%20, io_size);
             rc = !mode ? api->read(fd, io_buf, io_size) : ::read(fd, io_buf, io_size);
             if (rc < 0) {
                 cerr << "read sync failed rc: " << rc << " errno: " << errno << endl;
@@ -377,7 +377,8 @@ static int AsyncWriteIoTest(BdevCpp::AsyncApi *api,
         check_pos = pos;
         for (int i = 0 ; i < loop_count ; i++) {
             size_t io_size = calcIoSize(4096, i, min_iosize_mult, max_iosize_mult);
-            ::memset(io_buffers[num_write_futures], 'a' + i%20, io_size);
+            if (check)
+                ::memset(io_buffers[num_write_futures], 'a' + i%20, io_size);
 
             write_futures[num_write_futures] = api->write(fd, pos, io_buffers[num_write_futures], io_size);
             num_write_futures++;
@@ -477,7 +478,6 @@ static int AsyncReadIoTest(BdevCpp::AsyncApi *api,
     for (int j = 0 ; j < out_loop_count ; j++) {
         for (int i = 0 ; i < loop_count ; i++) {
             size_t io_size = calcIoSize(4096, i, min_iosize_mult, max_iosize_mult);
-            ::memset(io_buffers[num_read_futures], 'a' + i%20, io_size);
 
             read_futures[num_read_futures] = api->read(fd, pos, io_buffers[num_read_futures], io_size);
             num_read_futures++;
