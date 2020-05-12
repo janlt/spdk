@@ -43,6 +43,7 @@ friend class WriteFuturePolling;
 
   protected:
     int opStatus;
+    IoRqst ioRqst;
 };
 
 } // namespace BdevCpp

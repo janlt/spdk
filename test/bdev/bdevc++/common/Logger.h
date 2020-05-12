@@ -17,9 +17,19 @@
 #pragma once
 
 /** @todo implement logging categories */
+#ifdef IO_DEBUG
 #define IOP_INFO(msg) gLog.log(msg)
+#else
+#define IOP_INFO(msg) 
+#endif
+
+#ifdef IO_DEBUG
 #define IOP_CRITICAL(msg) gLog.log(msg)
-#ifdef DEBUG
+#else
+#define IOP_CRITICAL(msg) 
+#endif
+
+#ifdef IO_DEBUG
 #define IOP_DEBUG(msg) gLog.log(msg)
 #else
 #define IOP_DEBUG(msg)

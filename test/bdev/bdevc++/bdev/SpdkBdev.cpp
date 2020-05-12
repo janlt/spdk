@@ -140,7 +140,8 @@ void SpdkBdev::writeComplete(struct spdk_bdev_io *bdev_io, bool success,
             task->clb(StatusCode::UNKNOWN_ERROR, nullptr, 0);
     }
 
-    IoRqst::writePool.put(task->rqst);
+    if (task->rqst->inPlace == false)
+        IoRqst::writePool.put(task->rqst);
 
     //bdev->io2->enqueue(task);
 }
@@ -178,7 +179,8 @@ void SpdkBdev::readComplete(struct spdk_bdev_io *bdev_io, bool success,
 
     bdev->ioPoolMgr->putIoReadBuf(task->buff);
     bdev->ioBufsInUse--;
-    IoRqst::readPool.put(task->rqst);
+    if (task->rqst->inPlace == false)
+        IoRqst::readPool.put(task->rqst);
 
     //bdev->io2->enqueue(task);
 }
@@ -477,7 +479,7 @@ bool SpdkBdev::init(const SpdkConf &conf) {
     /*
      * Set up finalizer
      */
-#if 0
+#ifdef _IO_FINALIZER_
     io2 = new Io2Poller();
     io2Thread = new std::thread(&SpdkBdev::finilizerThreadMain, this);
     cpu_set_t cpuset;

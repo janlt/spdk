@@ -52,13 +52,13 @@ void Io2Poller::process() {
 
             switch (task->op) {
             case IoOp::READ:
-                if (dropIt == true)
+                if (dropIt == true && task->rqst->inPlace == false)
                     IoRqst::readPool.put(task->rqst);
                 else
                     _processRead(task);
                 break;
             case IoOp::WRITE:
-                if (dropIt == true)
+                if (dropIt == true && task->rqst->inPlace == false)
                     IoRqst::writePool.put(task->rqst);
                 else
                     _processWrite(task);
@@ -88,7 +88,8 @@ void Io2Poller::_processRead(DeviceTask *task) {
 
     bdev->ioPoolMgr->putIoReadBuf(task->buff);
     bdev->ioBufsInUse--;
-    IoRqst::readPool.put(task->rqst);
+    if (task->rqst->inPlace == false)
+        IoRqst::readPool.put(task->rqst);
 }
 
 void Io2Poller::_processWrite(DeviceTask *task) {
@@ -105,7 +106,8 @@ void Io2Poller::_processWrite(DeviceTask *task) {
             task->clb(StatusCode::UNKNOWN_ERROR, nullptr, 0);
     }
 
-    IoRqst::writePool.put(task->rqst);
+    if (task->rqst->inPlace == false)
+        IoRqst::writePool.put(task->rqst);
 }
 
 } // namespace BdevCpp

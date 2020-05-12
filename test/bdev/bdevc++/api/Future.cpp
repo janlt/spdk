@@ -26,10 +26,34 @@
 #include <chrono>
 #include <condition_variable>
 
+#include <boost/asio.hpp>
+#include <boost/filesystem.hpp>
+
+#include "spdk/conf.h"
+#include "spdk/cpuset.h"
+#include "spdk/env.h"
+#include "spdk/event.h"
+#include "spdk/ftl.h"
+#include "spdk/log.h"
+#include "spdk/queue.h"
+#include "spdk/stdinc.h"
+#include "spdk/thread.h"
+
+#include "Status.h"
+#include "Options.h"
+#include "BlockingPoller.h"
+#include "Poller.h"
+#include "IoPoller.h"
+#include "Io2Poller.h"
+#include "Rqst.h"
+#include "SpdkDevice.h"
+#include "SpdkConf.h"
+#include "SpdkBdev.h"
+#include "SpdkIoBuf.h"
+#include "SpdkCore.h"
+
 #include "ClassAlloc.h"
 #include "GeneralPool.h"
-#include "Status.h"
-
 #include "FutureBase.h"
 #include "Future.h"
 

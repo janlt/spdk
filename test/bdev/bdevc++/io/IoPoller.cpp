@@ -60,7 +60,8 @@ void IoPoller::_processRead(IoRqst *rqst) {
 
     if (!rqst->dataSize) {
         _rqstClb(rqst, StatusCode::OK);
-        IoRqst::writePool.put(rqst);
+        if (rqst->inPlace == false)
+            IoRqst::writePool.put(rqst);
         return;
     }
 
@@ -78,7 +79,8 @@ void IoPoller::_processRead(IoRqst *rqst) {
 
     if (spdkDev->read(ioTask) != true) {
         _rqstClb(rqst, StatusCode::UNKNOWN_ERROR);
-        IoRqst::readPool.put(rqst);
+        if (rqst->inPlace == false)
+            IoRqst::readPool.put(rqst);
     }
 }
 
@@ -92,7 +94,8 @@ void IoPoller::_processWrite(IoRqst *rqst) {
 
     if (!rqst->dataSize || !rqst->data) {
         _rqstClb(rqst, StatusCode::OK);
-        IoRqst::writePool.put(rqst);
+        if (rqst->inPlace == false)
+            IoRqst::writePool.put(rqst);
         return;
     }
 
@@ -110,7 +113,8 @@ void IoPoller::_processWrite(IoRqst *rqst) {
 
     if (spdkDev->write(ioTask) != true) {
         _rqstClb(rqst, StatusCode::UNKNOWN_ERROR);
-        IoRqst::writePool.put(rqst);
+        if (rqst->inPlace == false)
+            IoRqst::writePool.put(rqst);
     }
 }
 

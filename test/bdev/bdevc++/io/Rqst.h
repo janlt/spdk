@@ -51,22 +51,24 @@ class Rqst {
           clb(0), lba(-1), lun(-1) {};
     virtual ~Rqst() = default;
     void finalizeWrite(const char *_data, size_t _dataSize, RqstCallback _clb,
-            uint64_t _lba, uint32_t _lun) {
+            uint64_t _lba, uint32_t _lun, bool _inPlace = false) {
         op = T::WRITE;
         data = _data;
         dataSize = _dataSize;
         clb = _clb;
         lba = _lba;
         lun = _lun;
+        inPlace = _inPlace;
     }
     void finalizeRead(const char *_data, size_t _dataSize, RqstCallback _clb,
-            uint64_t _lba, uint32_t _lun) {
+            uint64_t _lba, uint32_t _lun, bool _inPlace = false) {
         op = T::READ;
         data = _data;
         dataSize = _dataSize;
         clb = _clb;
         lba = _lba;
         lun = _lun;
+        inPlace = _inPlace;
     }
 
     T op;
@@ -78,6 +80,7 @@ class Rqst {
     uint32_t lun;
     unsigned char taskBuffer[256];
     uint64_t devAddrBuf[2];
+    bool inPlace = false;
 
     static BdevCpp::GeneralPool<Rqst, BdevCpp::ClassAlloc<Rqst>> writePool;
     static BdevCpp::GeneralPool<Rqst, BdevCpp::ClassAlloc<Rqst>> readPool;

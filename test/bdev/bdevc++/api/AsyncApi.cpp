@@ -146,16 +146,15 @@ FutureBase *AsyncApi::read(int desc, uint64_t pos, char *buffer, size_t bufferSi
     rfut->setBuffer(buffer);
     rfut->setBufferSize(bufferSize);
 
-    IoRqst *getRqst = IoRqst::readPool.get();
+    IoRqst *getRqst = &rfut->ioRqst;
     getRqst->finalizeRead(nullptr, bufferSize,
          [rfut](
              StatusCode status, const char *data, size_t dataSize) {
              rfut->signal(status, data, dataSize);
          },
-         lba, lun);
+         lba, lun, true);
 
     if (spio->enqueue(getRqst) == false) {
-        IoRqst::readPool.put(getRqst);
         rfut->sink();
         return 0;
     }
@@ -179,16 +178,15 @@ FutureBase *AsyncApi::write(int desc, uint64_t pos, const char *data, size_t dat
     size_t nds = !(dataSize%4096) ? dataSize/4096 : dataSize/4096 + 1;
     nds *= 4096;
 
-    IoRqst *writeRqst = IoRqst::writePool.get();
+    IoRqst *writeRqst = &wfut->ioRqst;
     writeRqst->finalizeWrite(data, nds/*dataSize*/,
         [wfut](StatusCode status,
                 const char *data, size_t dataSize) {
             wfut->signal(status, data, dataSize);
         },
-        lba, lun);
+        lba, lun, true);
 
     if (spio->enqueue(writeRqst) == false) {
-        IoRqst::writePool.put(writeRqst);
         wfut->sink();
         return 0;
     }
