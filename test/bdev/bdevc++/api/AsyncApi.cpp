@@ -194,4 +194,11 @@ FutureBase *AsyncApi::write(int desc, uint64_t pos, const char *data, size_t dat
     return wfut;
 }
 
+int AsyncApi::pread(int desc, char *buffer, size_t bufferSize, off_t offset) {
+    return -1;
+}
+int AsyncApi::pwrite(int desc, const char *data, size_t dataSize, off_t offset) {
+    return -1;
+}
+
 } // namespace BdevCpp

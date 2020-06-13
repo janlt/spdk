@@ -35,7 +35,9 @@ class SyncApi : public ApiBase {
     int open(const char *name, int flags, mode_t mode = S_IRUSR | S_IWUSR);
     int close(int desc);
     int read(int desc, char *buffer, size_t bufferSize);
+    int pread(int desc, char *buffer, size_t bufferSize, off_t offset);
     int write(int desc, const char *data, size_t dataSize);
+    int pwrite(int desc, const char *data, size_t dataSize, off_t offset);
     off_t lseek(int fd, off_t offset, int whence);
     int fsync(int desc);
 
