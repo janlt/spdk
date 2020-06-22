@@ -322,6 +322,8 @@ static int AsyncIoCompleteReads(BdevCpp::AsyncApi *api,
             break;
         }
 
+        ::memcpy(io_buffers[i], data, dataSize);
+
         read_ios++;
         bytes_read += dataSize;
 
@@ -489,14 +491,16 @@ static int AsyncSyncWriteIoTest(BdevCpp::AsyncApi *api,
         int alternate = 0;
         for (int i = 0 ; i < loop_count ; i++) {
             size_t io_size = calcIoSize(512, i, min_iosize_mult, max_iosize_mult);
-            if (check)
+            if (check) {
                 ::memset(io_buffers[num_write_futures], 'a' + i%20, io_size);
+                ::memset(io_buf, 'a' + i%20, io_size);
+            }
 
             if (alternate) {
                 write_futures[num_write_futures] = api->write(fd, pos, io_buffers[num_write_futures], io_size);
                 num_write_futures++;
             } else {
-                int s_rc = api->pwrite(fd, io_buffers[num_write_futures], io_size, static_cast<off_t>(pos));
+                int s_rc = api->pwrite(fd, io_buf, io_size, static_cast<off_t>(pos));
                 if (s_rc < 0) {
                     cerr << "pwrite failed rc: " << s_rc << endl;
                     failed = true;
@@ -504,8 +508,13 @@ static int AsyncSyncWriteIoTest(BdevCpp::AsyncApi *api,
                 }
                 write_ios++;
                 bytes_written += io_size;
+                pos += io_size;
+                alternate = !alternate ? 1 : 0;
+                continue;
             }
+
             pos += io_size;
+            alternate = !alternate ? 1 : 0;
 
             if (!write_futures[num_write_futures - 1]) {
                 rc = AsyncIoCompleteWrites(api, write_ios, bytes_written, num_write_futures, write_futures);
@@ -516,8 +525,6 @@ static int AsyncSyncWriteIoTest(BdevCpp::AsyncApi *api,
 
             if (num_write_futures >= max_queued || num_write_futures >= maxWriteFutures)
                 rc = AsyncIoCompleteWrites(api, write_ios, bytes_written, num_write_futures, write_futures);
-
-            alternate = !alternate ? 1 : 0;
         }
 
         if (failed == true)
@@ -530,13 +537,14 @@ static int AsyncSyncWriteIoTest(BdevCpp::AsyncApi *api,
             for (int i = 0 ; i < loop_count ; i++) {
                 size_t io_size = calcIoSize(512, i, min_iosize_mult, max_iosize_mult);
                 ::memset(io_cmp_buffers[num_read_futures], 'a' + i%20, io_size);
+                ::memset(io_cmp_buf, 'a' + i%20, io_size);
                 io_sizes[num_read_futures] = io_size;
 
                 if (alternate) {
                     read_futures[num_read_futures] = api->read(fd, check_pos, io_buffers[num_read_futures], io_size);
                     num_read_futures++;
                 } else {
-                    int s_rc = api->pread(fd, io_buffers[num_read_futures], io_size, static_cast<off_t>(check_pos));
+                    int s_rc = api->pread(fd, io_buf, io_size, static_cast<off_t>(check_pos));
                     if (s_rc < 0) {
                         cerr << "pread failed rc: " << s_rc << endl;
                         failed = true;
@@ -544,15 +552,20 @@ static int AsyncSyncWriteIoTest(BdevCpp::AsyncApi *api,
                     }
                     read_ios++;
                     bytes_read += io_size;
+                    alternate = !alternate ? 1 : 0;
+                    check_pos += io_size;
 
-                    if (::memcmp(io_buffers[i], io_cmp_buffers[i], io_sizes[i])) {
-                        cerr << "Corrupted data after read at idx: " << i << " io_size: " << io_sizes[i] << endl;
+                    if (::memcmp(io_buf, io_cmp_buf, io_size)) {
+                        cerr << "Corrupted data after read at idx: " << i << " io_size: " << io_size << endl;
                         rc = -1;
                         failed = true;
                         break;
                     }
+                    continue;
                 }
+
                 check_pos += io_size;
+                alternate = !alternate ? 1 : 0;
 
                 if (!read_futures[num_read_futures - 1]) {
                     rc = AsyncIoCompleteReads(api, read_ios, bytes_read, num_read_futures, read_futures, io_buffers, io_cmp_buffers, io_sizes);
@@ -563,8 +576,6 @@ static int AsyncSyncWriteIoTest(BdevCpp::AsyncApi *api,
 
                 if (num_read_futures > max_queued || num_read_futures >= maxReadFutures)
                     rc = AsyncIoCompleteReads(api, read_ios, bytes_read, num_read_futures, read_futures, io_buffers, io_cmp_buffers, io_sizes);
-
-                alternate = !alternate ? 1 : 0;
             }
 
             rc = AsyncIoCompleteReads(api, read_ios, bytes_read, num_read_futures, read_futures, io_buffers, io_cmp_buffers, io_sizes);
@@ -710,7 +721,7 @@ static int AsyncSyncReadIoTest(BdevCpp::AsyncApi *api,
                 read_futures[num_read_futures] = api->read(fd, pos, io_buffers[num_read_futures], io_size);
                 num_read_futures++;
             } else {
-                int s_rc = api->pread(fd, io_buffers[num_read_futures], io_size, static_cast<off_t>(pos));
+                int s_rc = api->pread(fd, io_buf, io_size, static_cast<off_t>(pos));
                 if (s_rc < 0) {
                     cerr << "pread failed rc: " << s_rc << endl;
                     failed = true;
@@ -718,8 +729,13 @@ static int AsyncSyncReadIoTest(BdevCpp::AsyncApi *api,
                 }
                 read_ios++;
                 bytes_read += io_size;
+                pos += io_size;
+                alternate = !alternate ? 1 : 0;
+                continue;
             }
+
             pos += io_size;
+            alternate = !alternate ? 1 : 0;
 
             if (!read_futures[num_read_futures - 1]) {
                 rc = AsyncIoCompleteReads(api, read_ios, bytes_read, num_read_futures, read_futures, io_buffers, 0, io_sizes);
@@ -736,8 +752,6 @@ static int AsyncSyncReadIoTest(BdevCpp::AsyncApi *api,
 
         if (failed == true)
             break;
-
-        alternate = !alternate ? 1 : 0;
     }
 
     time_t etime = printTimeNow("End async test");
