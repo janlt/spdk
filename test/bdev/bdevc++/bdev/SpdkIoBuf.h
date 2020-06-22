@@ -37,6 +37,7 @@ class SpdkIoBuf {
     virtual void setSpdkDmaBuf(void *spdkBuf) = 0;
     virtual int getIdx() = 0;
     virtual void setIdx(int idx) = 0;
+    virtual uint32_t getBufSize() = 0;
 };
 
 template <uint32_t Size> class SpdkIoSizedBuf : public SpdkIoBuf {
@@ -54,6 +55,7 @@ template <uint32_t Size> class SpdkIoSizedBuf : public SpdkIoBuf {
     virtual void setSpdkDmaBuf(void *spdkBuf);
     virtual int getIdx();
     virtual void setIdx(int idx);
+    virtual uint32_t getBufSize();
 
   protected:
     static const uint32_t queueDepth = 16;
@@ -108,6 +110,12 @@ template <uint32_t Size> int SpdkIoSizedBuf<Size>::getIdx() { return backIdx; }
 template <uint32_t Size> void SpdkIoSizedBuf<Size>::setIdx(int idx) {
     backIdx = idx;
 }
+
+template <uint32_t Size> uint32_t SpdkIoSizedBuf<Size>::getBufSize() {
+    return bufSize;
+}
+
+
 
 template <uint32_t Size>
 BdevCpp::GeneralPool<SpdkIoSizedBuf<Size>,

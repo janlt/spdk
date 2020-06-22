@@ -30,7 +30,7 @@ SpdkIoBuf *SpdkIoBufMgr::getIoWriteBuf(uint32_t ioSize, uint32_t align) {
 
         if (!buf->getSpdkDmaBuf())
             buf->setSpdkDmaBuf(
-                spdk_dma_zmalloc(static_cast<size_t>(ioSize), align, NULL));
+                spdk_dma_zmalloc(static_cast<size_t>(buf->getBufSize()), align, NULL));
     } else {
         buf = new SpdkIoSizedBuf<1 << 16>(1 << 16, -1);
         buf->setSpdkDmaBuf(
@@ -55,7 +55,7 @@ SpdkIoBuf *SpdkIoBufMgr::getIoReadBuf(uint32_t ioSize, uint32_t align) {
         buf->setIdx(bufIdx);
         if (!buf->getSpdkDmaBuf())
             buf->setSpdkDmaBuf(
-                spdk_dma_zmalloc(static_cast<size_t>(ioSize), align, NULL));
+                spdk_dma_zmalloc(static_cast<size_t>(buf->getBufSize()), align, NULL));
     } else {
         buf = new SpdkIoSizedBuf<1 << 16>(1 << 16, -1);
         buf->setSpdkDmaBuf(
