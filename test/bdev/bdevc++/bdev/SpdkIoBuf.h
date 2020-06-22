@@ -38,6 +38,7 @@ class SpdkIoBuf {
     virtual int getIdx() = 0;
     virtual void setIdx(int idx) = 0;
     virtual uint32_t getBufSize() = 0;
+    virtual void setAttribs(uint32_t _bufSize, int _backIdx) = 0;
 };
 
 template <uint32_t Size> class SpdkIoSizedBuf : public SpdkIoBuf {
@@ -56,6 +57,7 @@ template <uint32_t Size> class SpdkIoSizedBuf : public SpdkIoBuf {
     virtual int getIdx();
     virtual void setIdx(int idx);
     virtual uint32_t getBufSize();
+    virtual void setAttribs(uint32_t _bufSize, int _backIdx);
 
   protected:
     static const uint32_t queueDepth = 16;
@@ -113,6 +115,11 @@ template <uint32_t Size> void SpdkIoSizedBuf<Size>::setIdx(int idx) {
 
 template <uint32_t Size> uint32_t SpdkIoSizedBuf<Size>::getBufSize() {
     return bufSize;
+}
+
+template <uint32_t Size> void SpdkIoSizedBuf<Size>::setAttribs(uint32_t _bufSize, int _backIdx) {
+    bufSize = _bufSize;
+    backIdx = _backIdx;
 }
 
 
