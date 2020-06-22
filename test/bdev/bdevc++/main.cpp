@@ -322,8 +322,6 @@ static int AsyncIoCompleteReads(BdevCpp::AsyncApi *api,
             break;
         }
 
-        ::memcpy(io_buffers[i], data, dataSize);
-
         read_ios++;
         bytes_read += dataSize;
 
