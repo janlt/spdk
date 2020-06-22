@@ -84,24 +84,19 @@ off_t SyncApi::lseek(int fd, off_t offset, int whence) {
 }
 
 int SyncApi::getIoPosLinear(int desc, uint64_t &lba, uint8_t &lun) {
-    FileEmu *femu = FileMap::getInstance().getFile(desc);
-    if (!femu)
-        return -1;
-    lba = (femu->pos.posLba + femu->geom.startLba)*femu->geom.blocksPerOptIo;
-    lun = femu->pos.posLun;
-    return 0;
+    return ApiBase::getIoPosLinear(desc, lba, lun);
 }
 
 int SyncApi::getIoPosLinear(int desc, uint64_t pos, uint64_t &lba, uint8_t &lun) {
-    return -1;
+    return ApiBase::getIoPosLinear(desc, pos, lba, lun);
 }
 
 int SyncApi::getIoPosStriped(int desc, uint64_t &lba, uint8_t &lun) {
-    return 0;
+    return ApiBase::getIoPosStriped(desc, lba, lun);
 }
 
 int SyncApi::getIoPosStriped(int desc, uint64_t pos, uint64_t &lba, uint8_t &lun) {
-    return -1;
+    return ApiBase::getIoPosStriped(desc, pos, lba, lun);
 }
 
 int SyncApi::read(int desc, char *buffer, size_t bufferSize) {

@@ -83,41 +83,19 @@ off_t AsyncApi::lseek(int fd, off_t offset, int whence) {
 }
 
 int AsyncApi::getIoPosLinear(int desc, uint64_t &lba, uint8_t &lun) {
-    return -1;
+    return ApiBase::getIoPosLinear(desc, lba, lun);
 }
 
 int AsyncApi::getIoPosLinear(int desc, uint64_t pos, uint64_t &lba, uint8_t &lun) {
-    FileEmu *femu = FileMap::getInstance().getFile(desc);
-    if (!femu)
-        return -1;
-    FilePos &apos = femu->pos;
-    apos.pos = pos;
-    int64_t deltaLbas = !(apos.pos%femu->geom.optLbaSize) ? apos.pos%femu->geom.optLbaSize : apos.pos%femu->geom.optLbaSize + 1;
-    if (apos.posLba + deltaLbas > femu->geom.endLba) {
-        apos.posLun++;
-        apos.posLun %= femu->geom.numLuns;
-        apos.posLba = femu->geom.startLba;
-    } else
-        lba = femu->geom.startLba + deltaLbas;
-    lba *= femu->geom.blocksPerOptIo;
-    lun = apos.posLun;
-    return 0;
+    return ApiBase::getIoPosLinear(desc, pos, lba, lun);
 }
 
 int AsyncApi::getIoPosStriped(int desc, uint64_t &lba, uint8_t &lun) {
-    return -1;
+    return ApiBase::getIoPosStriped(desc, lba, lun);
 }
 
 int AsyncApi::getIoPosStriped(int desc, uint64_t pos, uint64_t &lba, uint8_t &lun) {
-    FileEmu *femu = FileMap::getInstance().getFile(desc);
-    if (!femu)
-        return -1;
-    FilePos &apos = femu->pos;
-    apos.pos = (pos >> 12);
-    lun = apos.pos%femu->geom.numLuns;
-    lba = apos.pos + femu->geom.startLba; 
-    lba *= 8;
-    return 0;
+    return ApiBase::getIoPosStriped(desc, pos, lba, lun);
 }
 
 int AsyncApi::read(int desc, char *buffer, size_t bufferSize) {
@@ -175,11 +153,8 @@ FutureBase *AsyncApi::write(int desc, uint64_t pos, const char *data, size_t dat
         wfut = WriteFuture::writeFuturePool.get();
     wfut->setDataSize(dataSize);
 
-    size_t nds = !(dataSize%4096) ? dataSize/4096 : dataSize/4096 + 1;
-    nds *= 4096;
-
     IoRqst *writeRqst = &wfut->ioRqst;
-    writeRqst->finalizeWrite(data, nds/*dataSize*/,
+    writeRqst->finalizeWrite(data, dataSize,
         [wfut](StatusCode status,
                 const char *data, size_t dataSize) {
             wfut->signal(status, data, dataSize);
@@ -195,10 +170,75 @@ FutureBase *AsyncApi::write(int desc, uint64_t pos, const char *data, size_t dat
 }
 
 int AsyncApi::pread(int desc, char *buffer, size_t bufferSize, off_t offset) {
-    return -1;
+    mutex mtx;
+    condition_variable cv;
+    bool ready = false;
+
+    uint64_t lba;
+    uint8_t lun;
+    if (getIoPosStriped(desc, static_cast<uint64_t>(offset), lba, lun) < 0)
+        return -1;
+
+    IoRqst *getRqst = IoRqst::readPool.get();
+    getRqst->finalizeRead(nullptr, bufferSize,
+         [&mtx, &cv, &ready, buffer, bufferSize](
+             StatusCode status, const char *data, size_t dataSize) {
+             unique_lock<mutex> lck(mtx);
+             ready = status == StatusCode::OK ? true : false;
+             if (ready == true)
+                 memcpy(buffer, data, dataSize);
+             cv.notify_all();
+         },
+         lba, lun);
+
+    if (spio->enqueue(getRqst) == false) {
+        IoRqst::readPool.put(getRqst);
+        return -1;
+    }
+    // wait for completion
+    {
+        unique_lock<mutex> lk(mtx);
+        cv.wait_for(lk, 1s, [&ready] { return ready; });
+        if (ready == false)
+            return -1;
+    }
+
+    return bufferSize;
 }
+
 int AsyncApi::pwrite(int desc, const char *data, size_t dataSize, off_t offset) {
-    return -1;
+    mutex mtx;
+    condition_variable cv;
+    bool ready = false;
+
+    uint64_t lba;
+    uint8_t lun;
+    if (getIoPosStriped(desc, static_cast<uint64_t>(offset), lba, lun) < 0)
+        return -1;
+
+    IoRqst *writeRqst = IoRqst::writePool.get();
+    writeRqst->finalizeWrite(data, dataSize,
+        [&mtx, &cv, &ready](StatusCode status,
+                const char *data, size_t dataSize) {
+            unique_lock<mutex> lck(mtx);
+            ready = status == StatusCode::OK ? true : false;
+            cv.notify_all();
+        },
+        lba, lun);
+
+    if (spio->enqueue(writeRqst) == false) {
+        IoRqst::writePool.put(writeRqst);
+        return -1;
+    }
+    // wait for completion
+    {
+        unique_lock<mutex> lk(mtx);
+        cv.wait_for(lk, 1s, [&ready] { return ready; });
+        if (ready == false)
+            return -1;
+    }
+
+    return dataSize;
 }
 
 } // namespace BdevCpp

@@ -97,8 +97,8 @@ extern "C" struct SpdkBdevCtx {
 struct BdevGeom {
     const static uint32_t maxDevices = 64;
     IoDevType type;
-    uint32_t dev_num;
-    uint64_t blk_num[maxDevices];
+    uint32_t dev_num;               // device count
+    uint64_t blk_num[maxDevices];   // block count
     BdevGeom(const BdevGeom &r)
         : type(r.type), dev_num(r.dev_num) {
         for (uint32_t i = 0 ; i < maxDevices ; i++)

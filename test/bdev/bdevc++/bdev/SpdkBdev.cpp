@@ -326,10 +326,9 @@ bool SpdkBdev::doWrite(DeviceTask *task) {
     }
 
     uint64_t numBlks = !(task->size%task->blockSize) ? task->size/task->blockSize : task->size/task->blockSize + 1;
-    auto valSizeAlign = bdev->getAlignedSize(numBlks*task->blockSize);
+    auto dataSizeAlign = bdev->getAlignedSize(numBlks*task->blockSize);
     bdev->ioBufsInUse++;
-    task->buff =
-        ioPoolMgr->getIoWriteBuf(valSizeAlign, bdev->spBdevCtx.buf_align);
+    task->buff = ioPoolMgr->getIoWriteBuf(dataSizeAlign, bdev->spBdevCtx.buf_align);
 
     memcpy(task->buff->getSpdkDmaBuf(), task->rqst->data, task->size);
 

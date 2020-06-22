@@ -91,4 +91,47 @@ off_t ApiBase::lseek(int desc, off_t offset, int whence) {
     return femu->lseek(offset, whence);
 }
 
+int ApiBase::getIoPosLinear(int desc, uint64_t &lba, uint8_t &lun) {
+    FileEmu *femu = FileMap::getInstance().getFile(desc);
+    if (!femu)
+        return -1;
+    lba = (femu->pos.posLba + femu->geom.startLba)*femu->geom.blocksPerOptIo;
+    lun = femu->pos.posLun;
+    return 0;
+}
+
+int ApiBase::getIoPosLinear(int desc, uint64_t pos, uint64_t &lba, uint8_t &lun) {
+    FileEmu *femu = FileMap::getInstance().getFile(desc);
+    if (!femu)
+        return -1;
+    FilePos &apos = femu->pos;
+    apos.pos = pos;
+    int64_t deltaLbas = !(apos.pos%femu->geom.optLbaSize) ?
+            apos.pos%femu->geom.optLbaSize : apos.pos%femu->geom.optLbaSize + 1;
+    if (apos.posLba + deltaLbas > femu->geom.endLba) {
+        apos.posLun++;
+        apos.posLun %= femu->geom.numLuns;
+        apos.posLba = femu->geom.startLba;
+    } else
+        lba = femu->geom.startLba + deltaLbas;
+    lba *= femu->geom.blocksPerOptIo;
+    lun = apos.posLun;
+    return 0;
+}
+
+int ApiBase::getIoPosStriped(int desc, uint64_t pos, uint64_t &lba, uint8_t &lun) {
+    FileEmu *femu = FileMap::getInstance().getFile(desc);
+    if (!femu)
+        return -1;
+    FilePos &apos = femu->pos;
+    apos.pos = (pos >> 9);  // pos in 512 blocks
+    lun = apos.pos%femu->geom.numLuns;
+    lba = apos.pos + femu->geom.startLba;
+    return 0;
+}
+
+int ApiBase::getIoPosStriped(int desc, uint64_t &lba, uint8_t &lun) {
+    return 0;
+}
+
 } // namespace BdevCpp
