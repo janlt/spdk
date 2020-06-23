@@ -95,7 +95,7 @@ int ApiBase::getIoPosLinear(int desc, uint64_t &lba, uint8_t &lun) {
     FileEmu *femu = FileMap::getInstance().getFile(desc);
     if (!femu)
         return -1;
-    lba = (femu->pos.posLba + femu->geom.startLba)*femu->geom.blocksPerOptIo;
+    lba = femu->pos.posLba + femu->geom.startLba;
     lun = femu->pos.posLun;
     return 0;
 }
@@ -104,18 +104,9 @@ int ApiBase::getIoPosLinear(int desc, uint64_t pos, uint64_t &lba, uint8_t &lun)
     FileEmu *femu = FileMap::getInstance().getFile(desc);
     if (!femu)
         return -1;
-    FilePos &apos = femu->pos;
-    apos.pos = pos;
-    int64_t deltaLbas = !(apos.pos%femu->geom.optLbaSize) ?
-            apos.pos%femu->geom.optLbaSize : apos.pos%femu->geom.optLbaSize + 1;
-    if (apos.posLba + deltaLbas > femu->geom.endLba) {
-        apos.posLun++;
-        apos.posLun %= femu->geom.numLuns;
-        apos.posLba = femu->geom.startLba;
-    } else
-        lba = femu->geom.startLba + deltaLbas;
-    lba *= femu->geom.blocksPerOptIo;
-    lun = apos.posLun;
+    femu->lseek(static_cast<off_t>(pos), SEEK_SET);
+    lba = femu->pos.posLba + femu->geom.startLba;
+    lun = femu->pos.posLun;
     return 0;
 }
 

@@ -207,6 +207,87 @@ static int SyncWriteIoTest(BdevCpp::SyncApi *api,
     return rc;
 }
 
+static int SyncPwriteIoTest(BdevCpp::SyncApi *api,
+        const char *file_name, int check,
+        int loop_count, int out_loop_count,
+        size_t max_iosize_mult, size_t min_iosize_mult,
+        IoStats *st) {
+    int rc = 0;
+
+    int fd = api->open(file_name, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR | O_SYNC | O_DIRECT);
+    if (fd < 0) {
+        cerr << "open: " << file_name << " failed errno: " << errno << endl;
+        return -1;
+    }
+
+    time_t stime = printTimeNow("Start psync test ");
+
+    uint64_t bytes_written = 0;
+    uint64_t bytes_read = 0;
+    uint64_t write_ios = 0;
+    uint64_t read_ios = 0;
+    uint64_t pos = 0;
+    uint64_t check_pos = pos;
+
+    for (int j = 0 ; j < out_loop_count ; j++) {
+        for (int i = 0 ; i < loop_count ; i++) {
+            size_t io_size = calcIoSize(512, i, min_iosize_mult, max_iosize_mult);
+            if (check)
+                ::memset(io_buf, 'a' + i%20, io_size);
+            rc = api->pwrite(fd, io_buf, io_size, static_cast<off_t>(pos));
+            if (rc < 0) {
+                cerr << "pwrite sync failed rc: " << rc << " errno: " << errno << endl;
+                break;
+            }
+
+            pos += io_size;
+            write_ios++;
+            bytes_written += io_size;
+        }
+
+        if (!rc && check) {
+            for (int i = 0 ; i < loop_count ; i++) {
+                size_t io_size = calcIoSize(512, i, min_iosize_mult, max_iosize_mult);
+                ::memset(io_cmp_buf, 'a' + i%20, io_size);
+
+                rc = api->pread(fd, io_buf, io_size, static_cast<off_t>(check_pos));
+                if (rc < 0) {
+                    cerr << "pread sync failed rc: " << rc << " errno: " << errno << endl;
+                    rc = -1;
+                    break;
+                }
+
+                check_pos += io_size;
+                read_ios++;
+                bytes_read += io_size;
+
+                if (::memcmp(io_buf, io_cmp_buf, io_size)) {
+                    cerr << "Corrupted data after sync read i: " << i << " io_size: " << io_size << endl;
+                    rc = -1;
+                    break;
+                }
+            }
+        }
+    }
+
+    time_t etime = printTimeNow("End sync test ");
+    double t_diff = difftime(etime, stime);
+    if (!t_diff)
+        t_diff = 1;
+    st->write_mbsec = static_cast<double>(bytes_written)/t_diff;
+    st->write_mbsec /= (1024 * 1024);
+    st->read_mbsec = static_cast<double>(bytes_read)/t_diff;
+    st->read_mbsec /= (1024 * 1024);
+    st->write_iops = static_cast<double>(write_ios)/t_diff;
+    st->read_iops = static_cast<double>(read_ios)/t_diff;
+    st->bytes_written = bytes_written;
+    st->bytes_read = bytes_read;
+    st->write_ios = write_ios;
+    st->read_ios = read_ios;
+
+    return api->close(fd);
+}
+
 static int SyncReadIoTest(BdevCpp::SyncApi *api,
         const char *file_name, int mode, int check,
         int loop_count, int out_loop_count,
@@ -258,6 +339,58 @@ static int SyncReadIoTest(BdevCpp::SyncApi *api,
     rc = !mode ? api->close(fd) : ::close(fd);
 
     return rc;
+}
+
+static int SyncPreadIoTest(BdevCpp::SyncApi *api,
+        const char *file_name, int check,
+        int loop_count, int out_loop_count,
+        size_t max_iosize_mult, size_t min_iosize_mult,
+        IoStats *st) {
+    int rc = 0;
+
+    int fd = api->open(file_name, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR | O_SYNC | O_DIRECT);
+    if (fd < 0) {
+        cerr << "open: " << file_name << " failed errno: " << errno << endl;
+        return -1;
+    }
+
+    time_t stime = printTimeNow("Start psync test ");
+
+    uint64_t bytes_read = 0;
+    uint64_t read_ios = 0;
+    uint64_t pos = 0;
+
+    for (int j = 0 ; j < out_loop_count ; j++) {
+        for (int i = 0 ; i < loop_count ; i++) {
+            size_t io_size = calcIoSize(512, i, min_iosize_mult, max_iosize_mult);
+            rc = api->pread(fd, io_buf, io_size, static_cast<off_t>(pos));
+            if (rc < 0) {
+                cerr << "pread sync failed rc: " << rc << " errno: " << errno << endl;
+                break;
+            }
+
+            pos += io_size;
+            read_ios++;
+            bytes_read += io_size;
+        }
+    }
+
+    time_t etime = printTimeNow("End read sync test ");
+    double t_diff = difftime(etime, stime);
+    if (!t_diff)
+        t_diff = 1;
+    st->write_mbsec = 0;
+    st->write_mbsec = 0;
+    st->read_mbsec = static_cast<double>(bytes_read)/t_diff;
+    st->read_mbsec /= (1024 * 1024);
+    st->write_iops = 0;
+    st->read_iops = static_cast<double>(read_ios)/t_diff;
+    st->bytes_written = 0;
+    st->bytes_read = bytes_read;
+    st->write_ios = 0;
+    st->read_ios = read_ios;
+
+    return api->close(fd);
 }
 
 //
@@ -791,7 +924,8 @@ static void usage(const char *prog)
         "  -l, --legacy-newstack-mode     Use legacy (1) or new stack (0 - default) file IO routines\n"
         "  -i, --integrity-check          Run integrity check (false - default)\n"
         "  -O, --open-close-test          Run open/clsoe test\n"
-        "  -S, --sync-test                Run IO sync test\n"
+        "  -S, --sync-test                Run IO sync (read/write) test\n"
+        "  -P, --psync-test               Run IO psync (pwrite/pread) test\n"
         "  -A, --async-test               Run IO async test\n"
         "  -M, --async-sync-test          Run IO same file async/sync test\n"
         "  -R, --read-test                Run read test\n"
@@ -814,6 +948,7 @@ static int mainGetopt(int argc, char *argv[],
         bool &integrity_check,
         bool &open_close_test,
         bool &sync_test,
+        bool &psync_test,
         bool &async_test,
         bool &async_sync_test,
         eTestType &test_type,
@@ -823,7 +958,7 @@ static int mainGetopt(int argc, char *argv[],
     int ret = -1;
 
     while (1) {
-        static char short_options[] = "c:s:a:m:n:l:i:z:t:w:q:dhOSAMRW";
+        static char short_options[] = "c:s:a:m:n:l:i:z:t:w:q:dhOSPAMRW";
         static struct option long_options[] = {
             {"spdk-conf",               1, 0, 'c'},
             {"sync-file",               1, 0, 's'},
@@ -838,6 +973,7 @@ static int mainGetopt(int argc, char *argv[],
             {"num-files",               1, 0, 't'},
             {"open-close-test",         0, 0, 'O'},
             {"sync-test",               0, 0, 'S'},
+            {"psync-test",              0, 0, 'P'},
             {"async-test",              0, 0, 'A'},
             {"async-sync-test",         0, 0, 'M'},
             {"read-test",               0, 0, 'R'},
@@ -904,6 +1040,10 @@ static int mainGetopt(int argc, char *argv[],
 
         case 'S':
             sync_test = true;
+            break;
+
+        case 'P':
+            psync_test = true;
             break;
 
         case 'A':
@@ -1001,6 +1141,7 @@ int main(int argc, char **argv) {
 
     bool open_close_test = false;
     bool sync_test = false;
+    bool psync_test = false;
     bool async_test = false;
     bool async_sync_test = false;
     eTestType test_type = eWriteTest;
@@ -1019,6 +1160,7 @@ int main(int argc, char **argv) {
             integrity_check,
             open_close_test,
             sync_test,
+            psync_test,
             async_test,
             async_sync_test,
             test_type,
@@ -1030,6 +1172,8 @@ int main(int argc, char **argv) {
 
     int test_type_cnt = 0;
     if (sync_test == true)
+        test_type_cnt++;
+    if (psync_test == true)
         test_type_cnt++;
     if (async_test == true)
         test_type_cnt++;
@@ -1098,6 +1242,24 @@ int main(int argc, char **argv) {
                 &iostats);
             if (rc)
                 cerr << "SyncWriteIoTest failed rc: " << rc << endl;
+            else
+                cout << "bytes_written: " << iostats.bytes_written << " bytes_read: " << iostats.bytes_read <<
+                    " write_ios: " << iostats.write_ios << " read_ios: " << iostats.read_ios <<
+                    " write MiB/sec: " << static_cast<float>(iostats.write_mbsec) << " read MiB/sec: " << static_cast<float>(iostats.read_mbsec) <<
+                    " write IOPS: " << static_cast<float>(iostats.write_iops) << " read IOPS: " << static_cast<float>(iostats.read_iops) << endl;
+        }
+
+        if (psync_test == true) {
+            IoStats iostats;
+            memset(&iostats, '\0', sizeof(iostats));
+            rc = SyncPwriteIoTest(syncApi, sync_file.c_str(),
+                integrity_check,
+                loop_count, out_loop_count,
+                max_iosize_mult,
+                min_iosize_mult,
+                &iostats);
+            if (rc)
+                cerr << "SyncPwriteIoTest failed rc: " << rc << endl;
             else
                 cout << "bytes_written: " << iostats.bytes_written << " bytes_read: " << iostats.bytes_read <<
                     " write_ios: " << iostats.write_ios << " read_ios: " << iostats.read_ios <<
@@ -1213,6 +1375,24 @@ int main(int argc, char **argv) {
         else
             cout << "bytes_written: " << iostats.bytes_written << " bytes_read: " << iostats.bytes_read <<
                 " write_ios: " << iostats.write_ios << " read_ios: " << iostats.read_ios << 
+                " write MiB/sec: " << static_cast<float>(iostats.write_mbsec) << " read MiB/sec: " << static_cast<float>(iostats.read_mbsec) <<
+                " write IOPS: " << static_cast<float>(iostats.write_iops) << " read IOPS: " << static_cast<float>(iostats.read_iops) << endl;
+        }
+
+        if (psync_test == true) {
+        IoStats iostats;
+        memset(&iostats, '\0', sizeof(iostats));
+        rc = SyncPreadIoTest(syncApi, sync_file.c_str(),
+            integrity_check,
+            loop_count, out_loop_count,
+            max_iosize_mult,
+            min_iosize_mult,
+            &iostats);
+        if (rc)
+            cerr << "SyncPreadIoTest failed rc: " << rc << endl;
+        else
+            cout << "bytes_written: " << iostats.bytes_written << " bytes_read: " << iostats.bytes_read <<
+                " write_ios: " << iostats.write_ios << " read_ios: " << iostats.read_ios <<
                 " write MiB/sec: " << static_cast<float>(iostats.write_mbsec) << " read MiB/sec: " << static_cast<float>(iostats.read_mbsec) <<
                 " write IOPS: " << static_cast<float>(iostats.write_iops) << " read IOPS: " << static_cast<float>(iostats.read_iops) << endl;
         }
