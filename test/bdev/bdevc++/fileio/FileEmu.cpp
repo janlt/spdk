@@ -81,19 +81,9 @@ int FileEmu::adjustPos(int64_t delta) {
     //cout << "adjustPos ENTER p.pos " << pos.pos << " delta " << delta <<
             //" p.posLba " << pos.posLba << " p.posLun " << static_cast<uint32_t>(pos.posLun) << endl;
     pos.pos += delta;
-    int64_t deltaLbas;
-    if (delta > 0)
-        deltaLbas = !(delta%geom.optLbaSize) ? delta/geom.optLbaSize : delta/geom.optLbaSize + 1;
-    else if (delta < 0)
-        deltaLbas = !(delta%geom.optLbaSize) ? delta/geom.optLbaSize : delta/geom.optLbaSize - 1;
-    else
-        deltaLbas = 0;
-    if (pos.posLba + deltaLbas > geom.endLba) {
-        pos.posLun++;
-        pos.posLun %= geom.numLuns;
-        pos.posLba = geom.startLba;
-    } else
-        pos.posLba += deltaLbas;
+    uint64_t apos = pos.pos >> 9;  // pos in 512 blocks
+    pos.posLun = apos%geom.numLuns;
+    pos.posLba = apos + geom.startLba;
 
     //cout << "adjustPos EXIT p.pos " << pos.pos << " delta " << delta <<
             //" p.posLba " << pos.posLba << " p.posLun " << static_cast<uint32_t>(pos.posLun) << endl;

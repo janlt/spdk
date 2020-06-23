@@ -272,7 +272,8 @@ bool SpdkBdev::doRead(DeviceTask *task) {
                            true, task);
 #else
     //std::cout << "Read dataSize " << task->size <<
-        //" blockSize " << task->blockSize << " lba " << task->lba << " nblks " << numBlks << std::endl;
+        //" blockSize " << task->blockSize << " lba " << task->lba << " nblks " << numBlks <<
+        // " nvme: " << bdev->spBdevCtx.bdev_addr << std::endl;
     int r_rc = spdk_bdev_read_blocks(
         bdev->spBdevCtx.bdev_desc, bdev->spBdevCtx.io_channel,
         task->buff->getSpdkDmaBuf(), task->lba,
@@ -338,7 +339,8 @@ bool SpdkBdev::doWrite(DeviceTask *task) {
                             true, task);
 #else
     //std::cout << "Write dataSize " << task->size <<
-        //" blockSize " << task->blockSize << " lba " << task->lba << " nblks " << numBlks << std::endl;
+        //" blockSize " << task->blockSize << " lba " << task->lba << " nblks " << numBlks <<
+        // " nvme: " << bdev->spBdevCtx.bdev_addr << std::endl;
     int w_rc = spdk_bdev_write_blocks(
         bdev->spBdevCtx.bdev_desc, bdev->spBdevCtx.io_channel,
         task->buff->getSpdkDmaBuf(), task->lba,

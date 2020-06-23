@@ -130,8 +130,11 @@ static int SyncWriteIoTest(BdevCpp::SyncApi *api,
     uint64_t bytes_read = 0;
     uint64_t write_ios = 0;
     uint64_t read_ios = 0;
+    uint64_t pos = 0;
+    uint64_t prev_pos = pos;
 
     for (int j = 0 ; j < out_loop_count ; j++) {
+        prev_pos = pos;
         for (int i = 0 ; i < loop_count ; i++) {
             size_t io_size = calcIoSize(512, i, min_iosize_mult, max_iosize_mult);
             if (check)
@@ -148,12 +151,14 @@ static int SyncWriteIoTest(BdevCpp::SyncApi *api,
                 break;
             }
 
+            pos += io_size;
             write_ios++;
             bytes_written += io_size;
         }
 
         if (!rc && check) {
-            rc = !mode ? api->lseek(fd, 0, SEEK_SET) : ::lseek(fd, 0, SEEK_SET);
+            rc = !mode ? api->lseek(fd, static_cast<off_t>(prev_pos), SEEK_SET) :
+                    ::lseek(fd, static_cast<off_t>(prev_pos), SEEK_SET);
             if (rc < 0) {
                 cerr << "lseek failed rc: " << rc << " errno: " << errno << endl;
                 return rc;
@@ -179,7 +184,8 @@ static int SyncWriteIoTest(BdevCpp::SyncApi *api,
                 }
             }
 
-            rc = !mode ? api->lseek(fd, 0, SEEK_SET) : ::lseek(fd, 0, SEEK_SET);
+            rc = !mode ? api->lseek(fd, static_cast<off_t>(pos), SEEK_SET) :
+                    ::lseek(fd, static_cast<off_t>(pos), SEEK_SET);
             if (rc < 0) {
                 cerr << "lseek failed rc: " << rc << " errno: " << errno << endl;
                 return rc;
@@ -245,7 +251,7 @@ static int SyncPwriteIoTest(BdevCpp::SyncApi *api,
             bytes_written += io_size;
         }
 
-        if (!rc && check) {
+        if (rc >= 0 && check) {
             for (int i = 0 ; i < loop_count ; i++) {
                 size_t io_size = calcIoSize(512, i, min_iosize_mult, max_iosize_mult);
                 ::memset(io_cmp_buf, 'a' + i%20, io_size);
@@ -270,7 +276,7 @@ static int SyncPwriteIoTest(BdevCpp::SyncApi *api,
         }
     }
 
-    time_t etime = printTimeNow("End sync test ");
+    time_t etime = printTimeNow("End psync test ");
     double t_diff = difftime(etime, stime);
     if (!t_diff)
         t_diff = 1;
@@ -375,7 +381,7 @@ static int SyncPreadIoTest(BdevCpp::SyncApi *api,
         }
     }
 
-    time_t etime = printTimeNow("End read sync test ");
+    time_t etime = printTimeNow("End pread sync test ");
     double t_diff = difftime(etime, stime);
     if (!t_diff)
         t_diff = 1;
