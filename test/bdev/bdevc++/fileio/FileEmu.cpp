@@ -82,7 +82,8 @@ int FileEmu::adjustPos(int64_t delta) {
             //" p.posLba " << pos.posLba << " p.posLun " << static_cast<uint32_t>(pos.posLun) << endl;
     pos.pos += delta;
     uint64_t apos = pos.pos >> 9;  // pos in 512 blocks
-    pos.posLun = apos%geom.numLuns;
+    uint64_t pos4k = apos >> 3;
+    pos.posLun = pos4k%geom.numLuns;
     pos.posLba = apos + geom.startLba;
 
     //cout << "adjustPos EXIT p.pos " << pos.pos << " delta " << delta <<

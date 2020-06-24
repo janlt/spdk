@@ -24,7 +24,7 @@ SpdkIoBufMgr::~SpdkIoBufMgr() {}
 
 SpdkIoBuf *SpdkIoBufMgr::getIoWriteBuf(uint32_t ioSize, uint32_t align) {
     SpdkIoBuf *buf = 0;
-    uint32_t bufIdx = ioSize / 4096;
+    uint32_t bufIdx = !(ioSize%4096) ? (ioSize/4096 - 1) : ioSize/4096;
     if (bufIdx < 8) {
         buf = block[bufIdx]->getWriteBuf();
         if (!buf->getSpdkDmaBuf())
@@ -48,7 +48,7 @@ void SpdkIoBufMgr::putIoWriteBuf(SpdkIoBuf *ioBuf) {
 
 SpdkIoBuf *SpdkIoBufMgr::getIoReadBuf(uint32_t ioSize, uint32_t align) {
     SpdkIoBuf *buf = 0;
-    uint32_t bufIdx = ioSize / 4096;
+    uint32_t bufIdx = !(ioSize%4096) ? (ioSize/4096 - 1) : ioSize/4096;
     if (bufIdx < 8) {
         buf = block[bufIdx]->getReadBuf();
         if (!buf->getSpdkDmaBuf())
@@ -96,15 +96,6 @@ SpdkIoBufMgr::SpdkIoBufMgr() {
     block[5] = new SpdkIoSizedBuf<6 * 4096>(6 * 4096, 5);
     block[6] = new SpdkIoSizedBuf<7 * 4096>(7 * 4096, 6);
     block[7] = new SpdkIoSizedBuf<8 * 4096>(8 * 4096, 7);
-
-    block[0]->setAttribs(4096, 0);
-    block[1]->setAttribs(2 * 4096, 1);
-    block[2]->setAttribs(3 * 4096, 2);
-    block[3]->setAttribs(4 * 4096, 3);
-    block[4]->setAttribs(5 * 4096, 4);
-    block[5]->setAttribs(6 * 4096, 5);
-    block[6]->setAttribs(7 * 4096, 6);
-    block[7]->setAttribs(8 * 4096, 7);
 }
 
 } // namespace BdevCpp

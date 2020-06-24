@@ -116,7 +116,8 @@ int ApiBase::getIoPosStriped(int desc, uint64_t pos, uint64_t &lba, uint8_t &lun
         return -1;
     FilePos &apos = femu->pos;
     apos.pos = (pos >> 9);  // pos in 512 blocks
-    lun = apos.pos%femu->geom.numLuns;
+    uint64_t pos4k = apos.pos >> 3; // pos in 4k
+    lun = pos4k%femu->geom.numLuns;
     lba = apos.pos + femu->geom.startLba;
     return 0;
 }

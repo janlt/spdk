@@ -107,15 +107,18 @@ static size_t calcIoSize(size_t blkSize, size_t idx, size_t min_mult, size_t max
     return  blkSize * m;
 }
 
-static char io_buf[2500000];
-static char io_cmp_buf[2500000];
-
 static int SyncWriteIoTest(BdevCpp::SyncApi *api,
         const char *file_name, int mode, int check,
         int loop_count, int out_loop_count, 
         size_t max_iosize_mult, size_t min_iosize_mult,
         IoStats *st) {
     int rc = 0;
+    char *io_buf = new char[2500000];
+    char *io_cmp_buf = new char[2500000];
+    if (!io_buf || !io_cmp_buf) {
+        cerr << "Can't alloc buffer" << endl;
+        return -1;
+    }
 
     int fd = !mode ? api->open(file_name, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR | O_SYNC | O_DIRECT) : 
         ::open(file_name, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR | O_SYNC | O_DIRECT);
@@ -210,6 +213,11 @@ static int SyncWriteIoTest(BdevCpp::SyncApi *api,
 
     rc = !mode ? api->close(fd) : ::close(fd);
 
+    if (io_buf && io_cmp_buf) {
+        delete [] io_buf;
+        delete [] io_cmp_buf;
+    }
+
     return rc;
 }
 
@@ -219,6 +227,12 @@ static int SyncPwriteIoTest(BdevCpp::SyncApi *api,
         size_t max_iosize_mult, size_t min_iosize_mult,
         IoStats *st) {
     int rc = 0;
+    char *io_buf = new char[2500000];
+    char *io_cmp_buf = new char[2500000];
+    if (!io_buf || !io_cmp_buf) {
+        cerr << "Can't alloc buffer" << endl;
+        return -1;
+    }
 
     int fd = api->open(file_name, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR | O_SYNC | O_DIRECT);
     if (fd < 0) {
@@ -291,6 +305,11 @@ static int SyncPwriteIoTest(BdevCpp::SyncApi *api,
     st->write_ios = write_ios;
     st->read_ios = read_ios;
 
+    if (io_buf && io_cmp_buf) {
+        delete [] io_buf;
+        delete [] io_cmp_buf;
+    }
+
     return api->close(fd);
 }
 
@@ -300,6 +319,11 @@ static int SyncReadIoTest(BdevCpp::SyncApi *api,
         size_t max_iosize_mult, size_t min_iosize_mult,
         IoStats *st) {
     int rc = 0;
+    char *io_buf = new char[2500000];
+    if (!io_buf) {
+        cerr << "Can't alloc buffer" << endl;
+        return -1;
+    }
 
     int fd = !mode ? api->open(file_name, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR | O_SYNC | O_DIRECT) :
         ::open(file_name, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR | O_SYNC | O_DIRECT);
@@ -344,6 +368,9 @@ static int SyncReadIoTest(BdevCpp::SyncApi *api,
 
     rc = !mode ? api->close(fd) : ::close(fd);
 
+    if (io_buf)
+        delete [] io_buf;
+
     return rc;
 }
 
@@ -353,6 +380,11 @@ static int SyncPreadIoTest(BdevCpp::SyncApi *api,
         size_t max_iosize_mult, size_t min_iosize_mult,
         IoStats *st) {
     int rc = 0;
+    char *io_buf = new char[2500000];
+    if (!io_buf) {
+        cerr << "Can't alloc buffer" << endl;
+        return -1;
+    }
 
     int fd = api->open(file_name, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR | O_SYNC | O_DIRECT);
     if (fd < 0) {
@@ -395,6 +427,9 @@ static int SyncPreadIoTest(BdevCpp::SyncApi *api,
     st->bytes_read = bytes_read;
     st->write_ios = 0;
     st->read_ios = read_ios;
+
+    if (io_buf)
+        delete [] io_buf;
 
     return api->close(fd);
 }
@@ -595,6 +630,12 @@ static int AsyncSyncWriteIoTest(BdevCpp::AsyncApi *api,
     size_t num_write_futures = 0;
     BdevCpp::FutureBase *read_futures[maxReadFutures];
     size_t num_read_futures = 0;
+    char *io_buf = new char[2500000];
+    char *io_cmp_buf = new char[2500000];
+    if (!io_buf || io_cmp_buf) {
+        cerr << "Can't alloc buffer" << endl;
+        return -1;
+    }
 
     char *io_buffers[maxWriteFutures];
     char *io_cmp_buffers[maxReadFutures];
@@ -744,6 +785,11 @@ static int AsyncSyncWriteIoTest(BdevCpp::AsyncApi *api,
     for (size_t i = 0 ; i < maxReadFutures ; i++)
         delete [] io_cmp_buffers[i];
 
+    if (io_cmp_buf && io_buf) {
+        delete [] io_buf;
+        delete [] io_cmp_buf;
+    }
+
     return rc;
 }
 
@@ -827,6 +873,11 @@ static int AsyncSyncReadIoTest(BdevCpp::AsyncApi *api,
         IoStats *st) {
     BdevCpp::FutureBase *read_futures[maxReadFutures];
     size_t num_read_futures = 0;
+    char *io_buf = new char[2500000];
+    if (!io_buf) {
+        cerr << "Can't alloc buffer" << endl;
+        return -1;
+    }
 
     char *io_buffers[maxReadFutures];
     size_t io_sizes[maxReadFutures];
@@ -910,6 +961,9 @@ static int AsyncSyncReadIoTest(BdevCpp::AsyncApi *api,
 
     for (size_t i = 0 ; i < maxWriteFutures ; i++)
         delete [] io_buffers[i];
+
+    if (io_buf)
+        delete [] io_buf;
 
     return rc;
 }
