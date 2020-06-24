@@ -632,7 +632,7 @@ static int AsyncSyncWriteIoTest(BdevCpp::AsyncApi *api,
     size_t num_read_futures = 0;
     char *io_buf = new char[2500000];
     char *io_cmp_buf = new char[2500000];
-    if (!io_buf || io_cmp_buf) {
+    if (!io_buf || !io_cmp_buf) {
         cerr << "Can't alloc buffer" << endl;
         return -1;
     }
