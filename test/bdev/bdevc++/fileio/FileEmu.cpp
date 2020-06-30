@@ -58,7 +58,7 @@ FileEmu::~FileEmu() {
 }
 
 
-int FileEmu::lseek(off_t off, int whence) {
+off_t FileEmu::lseek(off_t off, int whence) {
     switch (whence) {
     case SEEK_SET: // absolute pos
         return adjustPos(static_cast<int64_t>(off) - pos.pos);
@@ -75,7 +75,7 @@ int FileEmu::lseek(off_t off, int whence) {
     }
 }
 
-int FileEmu::adjustPos(int64_t delta) {
+off_t FileEmu::adjustPos(int64_t delta) {
     if (delta < 0 && static_cast<uint64_t>(abs(delta)) > pos.pos)
         return -1;
     //cout << "adjustPos ENTER p.pos " << pos.pos << " delta " << delta <<
@@ -88,7 +88,7 @@ int FileEmu::adjustPos(int64_t delta) {
 
     //cout << "adjustPos EXIT p.pos " << pos.pos << " delta " << delta <<
             //" p.posLba " << pos.posLba << " p.posLun " << static_cast<uint32_t>(pos.posLun) << endl;
-    return 0;
+    return pos.pos;
 }
 
 void FileEmu::setGeom(uint64_t _startLba, uint64_t _endLba, uint8_t _startLun, uint8_t _numLuns) {

@@ -41,8 +41,8 @@ class FileEmu {
     FileEmu(const char *_name, int _flags, mode_t _mode, uint64_t _size = 0);
     virtual ~FileEmu();
 
-    int lseek(off_t off, int whence);
-    int adjustPos(int64_t delta);
+    off_t lseek(off_t off, int whence);
+    off_t adjustPos(int64_t delta);
     void setGeom(uint64_t _startLba, uint64_t _endLba, uint8_t _startLun, uint8_t _numLuns);
     void resetPos() {
         pos.pos = 0;
