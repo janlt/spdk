@@ -48,7 +48,8 @@ using namespace std;
 namespace BdevCpp {
 
 FileEmu::FileEmu(const char *_name, int _flags, mode_t _mode, uint64_t _size)
-    : name(_name), flags(_flags), mode(_mode), desc(-1), fd(-1), size(_size), fileSlot(-1) {
+    : name(_name), flags(_flags), mode(_mode), desc(-1),
+      fd(-1), size(_size), fileSlot(-1), state(FileEmu::eUnknown) {
     fd = ::open(_name, flags, mode);
     if (fd >= 0)
         desc = fd;
@@ -86,6 +87,8 @@ off_t FileEmu::adjustPos(int64_t delta) {
     pos.posLun = pos4k%geom.numLuns;
     pos.posLba = apos + geom.startLba;
 
+    if (pos.pos >size)
+        size = pos.pos;
     //cout << "adjustPos EXIT p.pos " << pos.pos << " delta " << delta <<
             //" p.posLba " << pos.posLba << " p.posLun " << static_cast<uint32_t>(pos.posLun) << endl;
     return pos.pos;
@@ -115,7 +118,7 @@ FileEmu *FileMap::getFile(int desc) {
     if (desc < 0 || static_cast<size_t>(desc) >= files.size())
         return 0;
     unique_lock<Lock> w_lock(opMutex);
-    return files[desc].get();
+    return files[desc];
 }
 
 void FileMap::setBottomSlot(uint32_t start) {
@@ -146,17 +149,27 @@ int FileMap::putFile(FileEmu *fileEmu, uint64_t numBlk, uint32_t numLun) {
         fileMap[topFreeSlot] = 1;
         topFreeSlot++;
     }
-    fileEmu->geom.startLba = numBlk/maxFiles * freeSlot;
-    fileEmu->geom.endLba = numBlk/maxFiles * (freeSlot + 1);
-    fileEmu->geom.numLuns = numLun;
-    fileEmu->geom.startLun = startLun%numLun;
+
+    FileEmu *closedFile = searchClosedFiles(fileEmu->name);
+    if (closedFile) {
+        fileEmu->size = closedFile->size;
+        fileEmu->geom = closedFile->geom;
+    } else {
+        fileEmu->geom.startLba = numBlk/maxFiles * freeSlot;
+        fileEmu->geom.endLba = numBlk/maxFiles * (freeSlot + 1);
+        fileEmu->geom.numLuns = numLun;
+        fileEmu->geom.startLun = startLun%numLun;
+    }
     startLun++;
     fileEmu->fileSlot = freeSlot;
+    fileEmu->state = FileEmu::eOpened;
 
     fileEmu->resetPos();
     fileEmu->lseek(0, SEEK_SET);
 
-    files[fileEmu->desc].reset(fileEmu);
+    if (files[fileEmu->desc])
+        return -1;
+    files[fileEmu->desc] = fileEmu;
 
     return fileEmu->desc;
 }
@@ -167,14 +180,31 @@ int FileMap::closeFile(int desc) {
 
     unique_lock<Lock> w_lock(opMutex);
 
-    FileEmu *femu = files[desc].get();
+    FileEmu *femu = files[desc];
+    if (!femu)
+        return -1;
     fileMap[femu->fileSlot] = 0;
     if (topFreeSlot - 1 == femu->fileSlot)
         topFreeSlot = femu->fileSlot;
     else
         setBottomSlot(0);
 
-    files[desc].reset();
+    femu->state = FileEmu::eClosed;
+    FileEmu *closedFile = searchClosedFiles(femu->name);
+    if (!closedFile)
+        closedFiles.push_back(femu);
+    else
+        closedFile->size = femu->size;
+
+    files[desc] = 0;
+    return 0;
+}
+
+FileEmu *FileMap::searchClosedFiles(const std::string &name) {
+    for (auto &p : closedFiles) {
+        if (p->name == name)
+            return p;
+    }
     return 0;
 }
 

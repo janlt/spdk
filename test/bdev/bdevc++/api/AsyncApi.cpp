@@ -136,6 +136,7 @@ FutureBase *AsyncApi::read(int desc, uint64_t pos, char *buffer, size_t bufferSi
         rfut->sink();
         return 0;
     }
+    ApiBase::lseek(desc, pos + bufferSize, SEEK_CUR);
 
     return rfut;
 }
@@ -165,6 +166,7 @@ FutureBase *AsyncApi::write(int desc, uint64_t pos, const char *data, size_t dat
         wfut->sink();
         return 0;
     }
+    ApiBase::lseek(desc, pos + dataSize, SEEK_CUR);
 
     return wfut;
 }
@@ -202,6 +204,7 @@ int AsyncApi::pread(int desc, char *buffer, size_t bufferSize, off_t offset) {
         if (ready == false)
             return -1;
     }
+    ApiBase::lseek(desc, offset + bufferSize, SEEK_CUR);
 
     return bufferSize;
 }
@@ -237,6 +240,7 @@ int AsyncApi::pwrite(int desc, const char *data, size_t dataSize, off_t offset) 
         if (ready == false)
             return -1;
     }
+    ApiBase::lseek(desc, offset + dataSize, SEEK_CUR);
 
     return dataSize;
 }

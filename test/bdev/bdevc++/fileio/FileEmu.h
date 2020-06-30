@@ -41,6 +41,12 @@ class FileEmu {
     FileEmu(const char *_name, int _flags, mode_t _mode, uint64_t _size = 0);
     virtual ~FileEmu();
 
+    enum State {
+        eUnknown = 0,
+        eOpened = 1,
+        eClosed = 2
+    };
+
     off_t lseek(off_t off, int whence);
     off_t adjustPos(int64_t delta);
     void setGeom(uint64_t _startLba, uint64_t _endLba, uint8_t _startLun, uint8_t _numLuns);
@@ -59,6 +65,7 @@ class FileEmu {
     FilePos pos;
     FileGeom geom;
     uint32_t fileSlot;
+    FileEmu::State state;
 };
 
 class FileMap {
@@ -71,12 +78,14 @@ class FileMap {
     int putFile(FileEmu *fileEmu, uint64_t numBlk, uint32_t numLun);
     void setBottomSlot(uint32_t start);
     int closeFile(int desc);
+    FileEmu *searchClosedFiles(const std::string &name);
 
     static FileMap &getInstance();
 
   private:
-    std::vector<std::shared_ptr<FileEmu>> files;
-    static const uint32_t maxFiles = 256;
+    std::vector<FileEmu *> files;
+    std::vector<FileEmu *> closedFiles;
+    static const uint32_t maxFiles = 1024;
     uint8_t fileMap[maxFiles];
     uint32_t bottomFreeSlot;
     uint32_t topFreeSlot;
