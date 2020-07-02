@@ -59,6 +59,13 @@ FileEmu::~FileEmu() {
 }
 
 
+int FileEmu::stat(struct stat *buf) {
+    buf->st_blksize = geom.LbaSize;
+    buf->st_blocks = size/geom.LbaSize;
+    buf->st_size = size;
+    return 0;
+}
+
 off_t FileEmu::lseek(off_t off, int whence) {
     switch (whence) {
     case SEEK_SET: // absolute pos
@@ -119,6 +126,22 @@ FileEmu *FileMap::getFile(int desc) {
         return 0;
     unique_lock<Lock> w_lock(opMutex);
     return files[desc];
+}
+
+FileEmu *FileMap::getFile(const char *path) {
+    if (!path)
+        return 0;
+    unique_lock<Lock> w_lock(opMutex);
+
+    for (auto &fe : files) {
+        if (fe->name == basename(path) || fe->name == path)
+            return fe;
+    }
+    for (auto &fe : closedFiles)
+        if (fe->name == basename(path) || fe->name == path)
+            return fe;
+
+    return 0;
 }
 
 void FileMap::setBottomSlot(uint32_t start) {

@@ -48,6 +48,7 @@ class FileEmu {
     };
 
     off_t lseek(off_t off, int whence);
+    int stat(struct stat *buf);
     off_t adjustPos(int64_t delta);
     void setGeom(uint64_t _startLba, uint64_t _endLba, uint8_t _startLun, uint8_t _numLuns);
     void resetPos() {
@@ -75,6 +76,7 @@ class FileMap {
 
   public:
     FileEmu *getFile(int desc);
+    FileEmu *getFile(const char *path);
     int putFile(FileEmu *fileEmu, uint64_t numBlk, uint32_t numLun);
     void setBottomSlot(uint32_t start);
     int closeFile(int desc);

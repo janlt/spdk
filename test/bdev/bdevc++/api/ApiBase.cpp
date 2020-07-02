@@ -126,4 +126,11 @@ int ApiBase::getIoPosStriped(int desc, uint64_t &lba, uint8_t &lun) {
     return 0;
 }
 
+int ApiBase::stat(const char *path, struct stat *buf) {
+    FileEmu *femu = FileMap::getInstance().getFile(path);
+    if (!femu)
+        return -1;
+    return femu->stat(buf);
+}
+
 } // namespace BdevCpp

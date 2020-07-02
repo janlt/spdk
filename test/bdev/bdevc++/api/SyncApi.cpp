@@ -251,6 +251,10 @@ int SyncApi::fsync(int desc) {
     return 0;
 }
 
+int SyncApi::stat(const char *path, struct stat *buf) {
+    return ApiBase::stat(path, buf);
+}
+
 FutureBase *SyncApi::read(int desc, uint64_t pos, char *buffer, size_t bufferSize, bool polling) {
     return 0;
 }
