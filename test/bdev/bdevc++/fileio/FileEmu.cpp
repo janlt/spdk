@@ -75,7 +75,7 @@ off_t FileEmu::lseek(off_t off, int whence) {
         return adjustPos(static_cast<int64_t>(off));
         break;
     case SEEK_END: // end of file
-        return adjustPos(static_cast<int64_t>(size));
+        return adjustPos(static_cast<int64_t>(size - pos.pos));
         break;
     default:
         return -1;
@@ -94,7 +94,7 @@ off_t FileEmu::adjustPos(int64_t delta) {
     pos.posLun = pos4k%geom.numLuns;
     pos.posLba = apos + geom.startLba;
 
-    if (pos.pos >size)
+    if (pos.pos > size)
         size = pos.pos;
     //cout << "adjustPos EXIT p.pos " << pos.pos << " delta " << delta <<
             //" p.posLba " << pos.posLba << " p.posLun " << static_cast<uint32_t>(pos.posLun) << endl;
@@ -134,11 +134,11 @@ FileEmu *FileMap::getFile(const char *path) {
     unique_lock<Lock> w_lock(opMutex);
 
     for (auto &fe : files) {
-        if (fe->name == basename(path) || fe->name == path)
+        if (fe && (fe->name == basename(path) || fe->name == path))
             return fe;
     }
     for (auto &fe : closedFiles)
-        if (fe->name == basename(path) || fe->name == path)
+        if (fe && (fe->name == basename(path) || fe->name == path))
             return fe;
 
     return 0;
