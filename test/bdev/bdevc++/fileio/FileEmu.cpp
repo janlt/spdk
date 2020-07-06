@@ -22,6 +22,7 @@
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <fstream>
 
 #include <string>
 #include <atomic>
@@ -116,9 +117,48 @@ FileMap::FileMap(size_t size)
     : bottomFreeSlot(-1), topFreeSlot(0), startLun(0) {
     files.resize(size);
     ::memset(fileMap, '\0', sizeof(fileMap));
+
+    savedFiles.open("/tmp/emu.saved.files");
+    initFromSavedFiles();
 }
 
 FileMap::~FileMap() {
+    savedFiles.close();
+}
+
+void FileMap::initFromSavedFiles() {
+    while (true) {
+        if (savedFiles.eof())
+            break;
+
+        FileEmu *emu = new FileEmu("", 0, 0);
+        savedFiles >> emu->name >>
+            emu->fileSlot >>
+            emu->size >>
+            emu->geom.startLba >>
+            emu->geom.endLba >>
+            emu->geom.startLun >>
+            emu->geom.numLuns;
+
+        updateClosedFiles(emu);
+    }
+}
+
+void FileMap::updateClosedFiles(FileEmu *fileEmu) {
+    for (auto &p : closedFiles) {
+        if (p->name == fileEmu->name && p->fileSlot == fileEmu->fileSlot) {
+            p->size = fileEmu->size;
+            p->geom.startLba = fileEmu->geom.startLba;
+            p->geom.endLba = fileEmu->geom.endLba;
+            p->geom.startLun = fileEmu->geom.startLun;
+            p->geom.numLuns = fileEmu->geom.numLuns;
+
+            delete fileEmu;
+            return;
+        }
+    }
+
+    closedFiles.push_back(fileEmu);
 }
 
 FileEmu *FileMap::getFile(int desc) {
@@ -211,10 +251,13 @@ int FileMap::closeFile(int desc) {
 
     femu->state = FileEmu::eClosed;
     FileEmu *closedFile = searchClosedFiles(femu->name);
-    if (!closedFile)
+    if (!closedFile) {
         closedFiles.push_back(femu);
-    else
+        addSavedFiles(femu);
+    } else {
         closedFile->size = femu->size;
+        updateSavedFiles(femu);
+    }
 
     files[desc] = 0;
     return 0;
@@ -226,6 +269,26 @@ FileEmu *FileMap::searchClosedFiles(const std::string &name) {
             return p;
     }
     return 0;
+}
+
+void FileMap::addSavedFiles(const FileEmu *fileEmu) {
+    savedFiles << fileEmu->name << " " <<
+            fileEmu->fileSlot << " " <<
+            fileEmu->size << " " <<
+            fileEmu->geom.startLba << " " <<
+            fileEmu->geom.endLba << " " <<
+            fileEmu->geom.startLun << " " <<
+            fileEmu->geom.numLuns << endl << flush;
+}
+
+void FileMap::updateSavedFiles(FileEmu *fileEmu) {
+    savedFiles << fileEmu->name << " " <<
+            fileEmu->fileSlot << " " <<
+            fileEmu->size << " " <<
+            fileEmu->geom.startLba << " " <<
+            fileEmu->geom.endLba << " " <<
+            fileEmu->geom.startLun << " " <<
+            fileEmu->geom.numLuns << endl << flush;
 }
 
 FileMap &FileMap::getInstance() {

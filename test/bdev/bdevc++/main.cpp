@@ -145,6 +145,20 @@ static int SyncWriteIoTest(BdevCpp::SyncApi *api,
         return -1;
     }
 
+    if (print_file_size == true)
+        cout << "Sync file: " << file_name << " size: " << getSyncFileSize(api, fd) << endl;
+
+    if (stat_file == true) {
+        struct stat st;
+        rc = api->stat(file_name, &st);
+        if (rc < 0)
+            cerr << "Stat file: " << file_name << " failed" << endl;
+        else
+            cout << "Stat file: st.st_size: " << st.st_size <<
+                    " st.st_blocks: " << st.st_blocks <<
+                    " st.st_blksize: " << st.st_blksize << endl;
+    }
+
     time_t stime = printTimeNow("Start sync test ");
 
     uint64_t bytes_written = 0;
@@ -274,6 +288,20 @@ static int SyncPwriteIoTest(BdevCpp::SyncApi *api,
         return -1;
     }
 
+    if (print_file_size == true)
+        cout << "Sync file: " << file_name << " size: " << getSyncFileSize(api, fd) << endl;
+
+    if (stat_file == true) {
+        struct stat st;
+        rc = api->stat(file_name, &st);
+        if (rc < 0)
+            cerr << "Stat file: " << file_name << " failed" << endl;
+        else
+            cout << "Stat file: st.st_size: " << st.st_size <<
+                    " st.st_blocks: " << st.st_blocks <<
+                    " st.st_blksize: " << st.st_blksize << endl;
+    }
+
     time_t stime = printTimeNow("Start psync test ");
 
     uint64_t bytes_written = 0;
@@ -382,6 +410,20 @@ static int SyncReadIoTest(BdevCpp::SyncApi *api,
         return -1;
     }
 
+    if (print_file_size == true)
+        cout << "Sync file: " << file_name << " size: " << getSyncFileSize(api, fd) << endl;
+
+    if (stat_file == true) {
+        struct stat st;
+        rc = api->stat(file_name, &st);
+        if (rc < 0)
+            cerr << "Stat file: " << file_name << " failed" << endl;
+        else
+            cout << "Stat file: st.st_size: " << st.st_size <<
+                    " st.st_blocks: " << st.st_blocks <<
+                    " st.st_blksize: " << st.st_blksize << endl;
+    }
+
     time_t stime = printTimeNow("Start sync test ");
 
     uint64_t bytes_read = 0;
@@ -456,6 +498,20 @@ static int SyncPreadIoTest(BdevCpp::SyncApi *api,
     if (fd < 0) {
         cerr << "open: " << file_name << " failed errno: " << errno << endl;
         return -1;
+    }
+
+    if (print_file_size == true)
+        cout << "Sync file: " << file_name << " size: " << getSyncFileSize(api, fd) << endl;
+
+    if (stat_file == true) {
+        struct stat st;
+        rc = api->stat(file_name, &st);
+        if (rc < 0)
+            cerr << "Stat file: " << file_name << " failed" << endl;
+        else
+            cout << "Stat file: st.st_size: " << st.st_size <<
+                    " st.st_blocks: " << st.st_blocks <<
+                    " st.st_blksize: " << st.st_blksize << endl;
     }
 
     time_t stime = printTimeNow("Start psync test ");
@@ -620,6 +676,20 @@ static int AsyncWriteIoTest(BdevCpp::AsyncApi *api,
     for (size_t i = 0 ; i < maxReadFutures ; i++)
         io_cmp_buffers[i] = new char[MAX_STACK_IO_SIZE];
 
+    if (print_file_size == true)
+        cout << "Async file: " << file_name << " size: " << getAsyncFileSize(api, fd) << endl;
+
+    if (stat_file == true) {
+        struct stat st;
+        rc = api->stat(file_name, &st);
+        if (rc < 0)
+            cerr << "Stat file: " << file_name << " failed" << endl;
+        else
+            cout << "Stat file: st.st_size: " << st.st_size <<
+                    " st.st_blocks: " << st.st_blocks <<
+                    " st.st_blksize: " << st.st_blksize << endl;
+    }
+
     time_t stime = printTimeNow("Start write (verify) async test ");
 
     uint64_t bytes_written = 0;
@@ -751,6 +821,20 @@ static int AsyncSyncWriteIoTest(BdevCpp::AsyncApi *api,
         io_buffers[i] = new char[MAX_STACK_IO_SIZE];
     for (size_t i = 0 ; i < maxReadFutures ; i++)
         io_cmp_buffers[i] = new char[MAX_STACK_IO_SIZE];
+
+    if (print_file_size == true)
+        cout << "Async file: " << file_name << " size: " << getAsyncFileSize(api, fd) << endl;
+
+    if (stat_file == true) {
+        struct stat st;
+        rc = api->stat(file_name, &st);
+        if (rc < 0)
+            cerr << "Stat file: " << file_name << " failed" << endl;
+        else
+            cout << "Stat file: st.st_size: " << st.st_size <<
+                    " st.st_blocks: " << st.st_blocks <<
+                    " st.st_blksize: " << st.st_blksize << endl;
+    }
 
     time_t stime = printTimeNow("Start write (verify) async test ");
 
@@ -929,6 +1013,20 @@ static int AsyncReadIoTest(BdevCpp::AsyncApi *api,
     for (size_t i = 0 ; i < maxReadFutures ; i++)
         io_buffers[i] = new char[MAX_STACK_IO_SIZE];
 
+    if (print_file_size == true)
+        cout << "Async file: " << file_name << " size: " << getAsyncFileSize(api, fd) << endl;
+
+    if (stat_file == true) {
+        struct stat st;
+        rc = api->stat(file_name, &st);
+        if (rc < 0)
+            cerr << "Stat file: " << file_name << " failed" << endl;
+        else
+            cout << "Stat file: st.st_size: " << st.st_size <<
+                    " st.st_blocks: " << st.st_blocks <<
+                    " st.st_blksize: " << st.st_blksize << endl;
+    }
+
     time_t stime = printTimeNow("Start read async test ");
 
     uint64_t bytes_read = 0;
@@ -1022,6 +1120,20 @@ static int AsyncSyncReadIoTest(BdevCpp::AsyncApi *api,
 
     for (size_t i = 0 ; i < maxReadFutures ; i++)
         io_buffers[i] = new char[MAX_STACK_IO_SIZE];
+
+    if (print_file_size == true)
+        cout << "Async file: " << file_name << " size: " << getAsyncFileSize(api, fd) << endl;
+
+    if (stat_file == true) {
+        struct stat st;
+        rc = api->stat(file_name, &st);
+        if (rc < 0)
+            cerr << "Stat file: " << file_name << " failed" << endl;
+        else
+            cout << "Stat file: st.st_size: " << st.st_size <<
+                    " st.st_blocks: " << st.st_blocks <<
+                    " st.st_blksize: " << st.st_blksize << endl;
+    }
 
     time_t stime = printTimeNow("Start read async test ");
 

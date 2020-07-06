@@ -36,7 +36,11 @@ struct FilePos {
     uint8_t posLun = -1; // which lun pos is on
 };
 
+class FileMap;
+
 class FileEmu {
+    friend class FileMap;
+
   public:
     FileEmu(const char *_name, int _flags, mode_t _mode, uint64_t _size = 0);
     virtual ~FileEmu();
@@ -82,6 +86,11 @@ class FileMap {
     int closeFile(int desc);
     FileEmu *searchClosedFiles(const std::string &name);
 
+    void addSavedFiles(const FileEmu *fileEmu);
+    void updateSavedFiles(FileEmu *fileEmu);
+    void initFromSavedFiles();
+    void updateClosedFiles(FileEmu *fileEmu);
+
     static FileMap &getInstance();
 
   private:
@@ -93,6 +102,8 @@ class FileMap {
     uint32_t topFreeSlot;
     uint32_t startLun;
     std::mutex opMutex;
+
+    std::fstream savedFiles;
 
     static FileMap *map;
     static std::mutex instanceMutex;
