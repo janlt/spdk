@@ -31,7 +31,7 @@ friend class WriteFuturePolling;
     virtual ~FutureBase();
 
   public:
-    virtual int get(char *&data, size_t &_dataSize, unsigned int _timeoutMsec = 100) = 0;
+    virtual int get(char *&data, size_t &_dataSize, unsigned long long _timeout = -1) = 0;
     virtual void signal(StatusCode status, const char *data, size_t _dataSize) = 0;
     virtual char *getData() = 0;
     virtual size_t getDataSize() = 0;

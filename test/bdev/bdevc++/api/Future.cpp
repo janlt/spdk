@@ -135,7 +135,7 @@ ReadFuturePolling::ReadFuturePolling(char *_buffer, size_t _bufferSize)
 
 ReadFuturePolling::~ReadFuturePolling() {}
 
-int ReadFuturePolling::get(char *&data, size_t &_dataSize, unsigned int _timeoutMsec) {
+int ReadFuturePolling::get(char *&data, size_t &_dataSize, unsigned long long _timeout) {
     while (!state) ;
     if (opStatus)
         return -1;
@@ -164,7 +164,7 @@ WriteFuturePolling::WriteFuturePolling(size_t _dataSize)
 
 WriteFuturePolling::~WriteFuturePolling() {}
 
-int WriteFuturePolling::get(char *&data, size_t &_dataSize, unsigned int _timeoutMsec) {
+int WriteFuturePolling::get(char *&data, size_t &_dataSize, unsigned long long _timeout) {
     while (!state) ;
     if (opStatus)
         return -1;
