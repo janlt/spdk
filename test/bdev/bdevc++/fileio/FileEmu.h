@@ -48,7 +48,8 @@ class FileEmu {
     enum State {
         eUnknown = 0,
         eOpened = 1,
-        eClosed = 2
+        eClosed = 2,
+        eExistent = 3
     };
 
     off_t lseek(off_t off, int whence);
@@ -75,7 +76,7 @@ class FileEmu {
 
 class FileMap {
   private:
-    FileMap(size_t size = (1 << 16));
+    FileMap(size_t size = (1 << 10));
     virtual ~FileMap();
 
   public:
@@ -86,6 +87,7 @@ class FileMap {
     int closeFile(int desc);
     int unlinkFile(const char *path);
     FileEmu *searchClosedFiles(const std::string &name);
+    uint32_t getFreeSlot();
 
     void addSavedFiles(const FileEmu *fileEmu, int exists);
     void initFromSavedFiles();

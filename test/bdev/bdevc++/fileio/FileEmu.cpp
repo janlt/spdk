@@ -140,11 +140,14 @@ int FileMap::unlinkFile(const char *path) {
         }
     }
 
-    for (size_t i = 0 ; i < closedFiles.size() ; i++)
-        if (closedFiles[i] && (closedFiles[i]->name == basename(path) || closedFiles[i]->name == path)) {
-            closedFiles.erase(closedFiles.begin() + i);
-            break;
-        }
+    if (!feNieladnie) {
+        for (size_t i = 0 ; i < closedFiles.size() ; i++)
+            if (closedFiles[i] && (closedFiles[i]->name == basename(path) || closedFiles[i]->name == path)) {
+                feNieladnie = closedFiles[i];
+                closedFiles.erase(closedFiles.begin() + i);
+                break;
+            }
+    }
 
     if (!feNieladnie)
         return -1;
@@ -175,11 +178,11 @@ void FileMap::initFromSavedFiles() {
             emu->geom.numLuns >>
             exists;
 
-        if (savedFiles.eof() == true)
+        if (savedFiles.fail() == true)
             break;
 
         if (exists) {
-            emu->state = FileEmu::eClosed;
+            emu->state = FileEmu::eExistent;
             updateClosedFiles(emu);
         } else {
             removeFromClosedFiles(emu);
@@ -187,6 +190,7 @@ void FileMap::initFromSavedFiles() {
         }
     }
 
+    savedFiles.clear();
     savedFiles.seekp(ios_base::end);
     savedFiles.clear();
 }
@@ -250,6 +254,24 @@ void FileMap::setBottomSlot(uint32_t start) {
     bottomFreeSlot = -1;
 }
 
+uint32_t FileMap::getFreeSlot() {
+    uint32_t freeSlot = -1;
+
+    if (bottomFreeSlot != static_cast<uint32_t>(-1)) {
+        freeSlot = bottomFreeSlot;
+        fileMap[bottomFreeSlot] = 1;
+        setBottomSlot(bottomFreeSlot);
+    } else {
+        if (topFreeSlot >= maxFiles)
+            return freeSlot;
+        freeSlot = topFreeSlot;
+        fileMap[topFreeSlot] = 1;
+        topFreeSlot++;
+    }
+
+    return freeSlot;
+}
+
 int FileMap::putFile(FileEmu *fileEmu, uint64_t numBlk, uint32_t numLun) {
     if (!fileEmu || fileEmu->desc < 0 || files[fileEmu->desc])
         return -1;
@@ -259,17 +281,9 @@ int FileMap::putFile(FileEmu *fileEmu, uint64_t numBlk, uint32_t numLun) {
     FileEmu *closedFile = searchClosedFiles(fileEmu->name);
     uint32_t freeSlot;
     if (!closedFile) {
-        if (bottomFreeSlot != static_cast<uint32_t>(-1)) {
-            freeSlot = bottomFreeSlot;
-            fileMap[bottomFreeSlot] = 1;
-            setBottomSlot(bottomFreeSlot);
-        } else {
-            if (topFreeSlot >= maxFiles)
-                return -1;
-            freeSlot = topFreeSlot;
-            fileMap[topFreeSlot] = 1;
-            topFreeSlot++;
-        }
+        freeSlot = getFreeSlot();
+        if (freeSlot == static_cast<uint32_t>(-1))
+            return -1;
 
         fileEmu->geom.startLba = numBlk/maxFiles * freeSlot;
         fileEmu->geom.endLba = numBlk/maxFiles * (freeSlot + 1);
@@ -278,7 +292,22 @@ int FileMap::putFile(FileEmu *fileEmu, uint64_t numBlk, uint32_t numLun) {
     } else {
         fileEmu->size = closedFile->size;
         fileEmu->geom = closedFile->geom;
-        freeSlot = closedFile->fileSlot;
+        switch (closedFile->size) {
+        case FileEmu::eClosed:
+            freeSlot = closedFile->fileSlot;
+            break;
+        case FileEmu::eExistent:
+            freeSlot = getFreeSlot();
+            if (freeSlot == static_cast<uint32_t>(-1))
+                return -1;
+            closedFile->fileSlot = freeSlot;
+            break;
+        default:
+            cerr << "File wrong state name: " << closedFile->name << endl;
+            return -1;
+            break;
+        }
+
     }
 
     startLun++;
