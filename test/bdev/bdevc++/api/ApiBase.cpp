@@ -135,15 +135,15 @@ int ApiBase::stat(const char *path, struct stat *buf) {
 
 int ApiBase::unlink(const char *path) {
     int ret = FileMap::getInstance().unlinkFile(path);
-    if (!ret)
-        ::unlink(path);
+    if (ret >= 0)
+        ret = ::unlink(path);
     return ret;
 }
 
 int ApiBase::rename(const char *oldpath, const char *newpath) {
     int ret = FileMap::getInstance().renameFile(oldpath, newpath);
-    if (!ret)
-        ::rename(oldpath, newpath);
+    if (ret >= 0)
+        ret = ::rename(oldpath, newpath);
     return ret;
 }
 

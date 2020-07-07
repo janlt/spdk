@@ -164,9 +164,9 @@ int FileMap::renameFile(const char *oldpath, const char *newpath) {
 
     unique_lock<Lock> w_lock(opMutex);
 
-    for (auto &fe : closedFiles) {
+    for (auto &fe : files) {
         if (fe && (fe->name == basename(oldpath) || fe->name == oldpath))
-            return -1;
+            return 2;
     }
 
     for (auto &fe : closedFiles)
@@ -175,7 +175,7 @@ int FileMap::renameFile(const char *oldpath, const char *newpath) {
             return 0;
         }
 
-    return -1;
+    return 2;
 }
 
 void FileMap::initFromSavedFiles() {
