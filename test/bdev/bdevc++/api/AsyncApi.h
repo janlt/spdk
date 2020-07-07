@@ -40,6 +40,7 @@ class AsyncApi : public ApiBase {
     int fsync(int desc);
     int stat(const char *path, struct stat *buf);
     int unlink(const char *path);
+    int rename(const char *oldpath, const char *newpath);
 
     virtual int pread(int desc, char *buffer, size_t bufferSize, off_t offset);
     virtual int pwrite(int desc, const char *data, size_t dataSize, off_t offset);

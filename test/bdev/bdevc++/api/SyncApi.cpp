@@ -259,6 +259,10 @@ int SyncApi::unlink(const char *path) {
     return ApiBase::unlink(path);
 }
 
+int SyncApi::rename(const char *oldpath, const char *newpath) {
+    return ApiBase::rename(oldpath, newpath);
+}
+
 FutureBase *SyncApi::read(int desc, uint64_t pos, char *buffer, size_t bufferSize, bool polling) {
     return 0;
 }

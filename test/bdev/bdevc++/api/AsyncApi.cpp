@@ -118,6 +118,10 @@ int AsyncApi::unlink(const char *path) {
     return ApiBase::unlink(path);
 }
 
+int AsyncApi::rename(const char *oldpath, const char *newpath) {
+    return ApiBase::rename(oldpath, newpath);
+}
+
 FutureBase *AsyncApi::read(int desc, uint64_t pos, char *buffer, size_t bufferSize, bool polling) {
     uint64_t lba;
     uint8_t lun;

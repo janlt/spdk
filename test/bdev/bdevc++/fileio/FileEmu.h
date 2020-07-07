@@ -86,6 +86,7 @@ class FileMap {
     void setBottomSlot(uint32_t start);
     int closeFile(int desc);
     int unlinkFile(const char *path);
+    int renameFile(const char *oldpath, const char *newpath);
     FileEmu *searchClosedFiles(const std::string &name);
     uint32_t getFreeSlot();
 

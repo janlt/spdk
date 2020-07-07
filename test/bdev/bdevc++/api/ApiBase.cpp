@@ -140,4 +140,11 @@ int ApiBase::unlink(const char *path) {
     return ret;
 }
 
+int ApiBase::rename(const char *oldpath, const char *newpath) {
+    int ret = FileMap::getInstance().renameFile(oldpath, newpath);
+    if (!ret)
+        ::rename(oldpath, newpath);
+    return ret;
+}
+
 } // namespace BdevCpp

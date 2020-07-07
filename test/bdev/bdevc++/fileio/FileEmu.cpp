@@ -158,6 +158,26 @@ int FileMap::unlinkFile(const char *path) {
     return 0;
 }
 
+int FileMap::renameFile(const char *oldpath, const char *newpath) {
+    if (!oldpath || !newpath)
+        return -1;
+
+    unique_lock<Lock> w_lock(opMutex);
+
+    for (auto &fe : closedFiles) {
+        if (fe && (fe->name == basename(oldpath) || fe->name == oldpath))
+            return -1;
+    }
+
+    for (auto &fe : closedFiles)
+        if (fe && (fe->name == basename(oldpath) || fe->name == oldpath)) {
+            fe->name = newpath;
+            return 0;
+        }
+
+    return -1;
+}
+
 void FileMap::initFromSavedFiles() {
     unique_lock<Lock> w_lock(opMutex);
 
@@ -168,15 +188,19 @@ void FileMap::initFromSavedFiles() {
             break;
 
         int exists = 1;
+        int startLun, numLuns;
         FileEmu *emu = new FileEmu("asd090a9si0i09i0adddds_+09asd", 0, 0);
         savedFiles >> emu->name >>
             emu->fileSlot >>
             emu->size >>
             emu->geom.startLba >>
             emu->geom.endLba >>
-            emu->geom.startLun >>
-            emu->geom.numLuns >>
+            startLun >>
+            numLuns >>
             exists;
+
+        emu->geom.startLun = static_cast<uint8_t>(startLun);
+        emu->geom.numLuns = static_cast<uint8_t>(numLuns);
 
         if (savedFiles.fail() == true)
             break;
@@ -292,7 +316,7 @@ int FileMap::putFile(FileEmu *fileEmu, uint64_t numBlk, uint32_t numLun) {
     } else {
         fileEmu->size = closedFile->size;
         fileEmu->geom = closedFile->geom;
-        switch (closedFile->size) {
+        switch (closedFile->state) {
         case FileEmu::eClosed:
             freeSlot = closedFile->fileSlot;
             break;
