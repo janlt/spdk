@@ -255,6 +255,10 @@ int SyncApi::stat(const char *path, struct stat *buf) {
     return ApiBase::stat(path, buf);
 }
 
+int SyncApi::unlink(const char *path) {
+    return ApiBase::unlink(path);
+}
+
 FutureBase *SyncApi::read(int desc, uint64_t pos, char *buffer, size_t bufferSize, bool polling) {
     return 0;
 }

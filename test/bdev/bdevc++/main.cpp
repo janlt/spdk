@@ -129,6 +129,7 @@ static int SyncWriteIoTest(BdevCpp::SyncApi *api,
         size_t max_iosize_mult, size_t min_iosize_mult,
         bool print_file_size,
         bool stat_file,
+        bool unlink_file,
         IoStats *st) {
     int rc = 0;
     char *io_buf = new char[MAX_STACK_IO_SIZE];
@@ -259,6 +260,12 @@ static int SyncWriteIoTest(BdevCpp::SyncApi *api,
 
     rc = !mode ? api->close(fd) : ::close(fd);
 
+    if (unlink_file == true) {
+        rc = !mode ? api->unlink(file_name) : ::unlink(file_name);
+        if (rc < 0)
+            cerr << "Unlink file: " << file_name << " failed" << endl;
+    }
+
     if (io_buf && io_cmp_buf) {
         delete [] io_buf;
         delete [] io_cmp_buf;
@@ -273,6 +280,7 @@ static int SyncPwriteIoTest(BdevCpp::SyncApi *api,
         size_t max_iosize_mult, size_t min_iosize_mult,
         bool print_file_size,
         bool stat_file,
+        bool unlink_file,
         IoStats *st) {
     int rc = 0;
     char *io_buf = new char[MAX_STACK_IO_SIZE];
@@ -386,7 +394,15 @@ static int SyncPwriteIoTest(BdevCpp::SyncApi *api,
         delete [] io_cmp_buf;
     }
 
-    return api->close(fd);
+    api->close(fd);
+
+    if (unlink_file == true) {
+        rc = api->unlink(file_name);
+        if (rc < 0)
+            cerr << "Unlink file: " << file_name << " failed" << endl;
+    }
+
+    return rc;
 }
 
 static int SyncReadIoTest(BdevCpp::SyncApi *api,
@@ -395,6 +411,7 @@ static int SyncReadIoTest(BdevCpp::SyncApi *api,
         size_t max_iosize_mult, size_t min_iosize_mult,
         bool print_file_size,
         bool stat_file,
+        bool unlink_file,
         IoStats *st) {
     int rc = 0;
     char *io_buf = new char[MAX_STACK_IO_SIZE];
@@ -474,6 +491,12 @@ static int SyncReadIoTest(BdevCpp::SyncApi *api,
 
     rc = !mode ? api->close(fd) : ::close(fd);
 
+    if (unlink_file == true) {
+        rc = api->unlink(file_name);
+        if (rc < 0)
+            cerr << "Unlink file: " << file_name << " failed" << endl;
+    }
+
     if (io_buf)
         delete [] io_buf;
 
@@ -486,6 +509,7 @@ static int SyncPreadIoTest(BdevCpp::SyncApi *api,
         size_t max_iosize_mult, size_t min_iosize_mult,
         bool print_file_size,
         bool stat_file,
+        bool unlink_file,
         IoStats *st) {
     int rc = 0;
     char *io_buf = new char[MAX_STACK_IO_SIZE];
@@ -567,7 +591,15 @@ static int SyncPreadIoTest(BdevCpp::SyncApi *api,
     if (io_buf)
         delete [] io_buf;
 
-    return api->close(fd);
+    api->close(fd);
+
+    if (unlink_file == true) {
+        rc = api->unlink(file_name);
+        if (rc < 0)
+            cerr << "Unlink file: " << file_name << " failed" << endl;
+    }
+
+    return rc;
 }
 
 //
@@ -653,6 +685,7 @@ static int AsyncWriteIoTest(BdevCpp::AsyncApi *api,
         size_t max_iosize_mult, size_t min_iosize_mult, size_t max_queued,
         bool print_file_size,
         bool stat_file,
+        bool unlink_file,
         IoStats *st) {
     BdevCpp::FutureBase *write_futures[maxWriteFutures];
     size_t num_write_futures = 0;
@@ -779,6 +812,12 @@ static int AsyncWriteIoTest(BdevCpp::AsyncApi *api,
 
     rc = api->close(fd);
 
+    if (unlink_file == true) {
+        rc = api->unlink(file_name);
+        if (rc < 0)
+            cerr << "Unlink file: " << file_name << " failed" << endl;
+    }
+
     for (size_t i = 0 ; i < maxWriteFutures ; i++)
         delete [] io_buffers[i];
     for (size_t i = 0 ; i < maxReadFutures ; i++)
@@ -793,6 +832,7 @@ static int AsyncSyncWriteIoTest(BdevCpp::AsyncApi *api,
         size_t max_iosize_mult, size_t min_iosize_mult, size_t max_queued,
         bool print_file_size,
         bool stat_file,
+        bool unlink_file,
         IoStats *st) {
     BdevCpp::FutureBase *write_futures[maxWriteFutures];
     size_t num_write_futures = 0;
@@ -976,6 +1016,12 @@ static int AsyncSyncWriteIoTest(BdevCpp::AsyncApi *api,
 
     rc = api->close(fd);
 
+    if (unlink_file == true) {
+        rc = api->unlink(file_name);
+        if (rc < 0)
+            cerr << "Unlink file: " << file_name << " failed" << endl;
+    }
+
     for (size_t i = 0 ; i < maxWriteFutures ; i++)
         delete [] io_buffers[i];
     for (size_t i = 0 ; i < maxReadFutures ; i++)
@@ -995,6 +1041,7 @@ static int AsyncReadIoTest(BdevCpp::AsyncApi *api,
         size_t max_iosize_mult, size_t min_iosize_mult, size_t max_queued,
         bool print_file_size,
         bool stat_file,
+        bool unlink_file,
         IoStats *st) {
     BdevCpp::FutureBase *read_futures[maxReadFutures];
     size_t num_read_futures = 0;
@@ -1086,6 +1133,12 @@ static int AsyncReadIoTest(BdevCpp::AsyncApi *api,
 
     rc = api->close(fd);
 
+    if (unlink_file == true) {
+        rc = api->unlink(file_name);
+        if (rc < 0)
+            cerr << "Unlink file: " << file_name << " failed" << endl;
+    }
+
     for (size_t i = 0 ; i < maxWriteFutures ; i++)
         delete [] io_buffers[i];
 
@@ -1098,6 +1151,7 @@ static int AsyncSyncReadIoTest(BdevCpp::AsyncApi *api,
         size_t max_iosize_mult, size_t min_iosize_mult, size_t max_queued,
         bool print_file_size,
         bool stat_file,
+        bool unlink_file,
         IoStats *st) {
     BdevCpp::FutureBase *read_futures[maxReadFutures];
     size_t num_read_futures = 0;
@@ -1215,6 +1269,12 @@ static int AsyncSyncReadIoTest(BdevCpp::AsyncApi *api,
 
     rc = api->close(fd);
 
+    if (unlink_file == true) {
+        rc = api->unlink(file_name);
+        if (rc < 0)
+            cerr << "Unlink file: " << file_name << " failed" << endl;
+    }
+
     for (size_t i = 0 ; i < maxWriteFutures ; i++)
         delete [] io_buffers[i];
 
@@ -1246,8 +1306,9 @@ static void usage(const char *prog)
         "  -M, --async-sync-test          Run IO same file async/sync test\n"
         "  -R, --read-test                Run read test\n"
         "  -W, --write-test               Run write test (default)\n"
-        "  -Z, --print-file-size          Print file size after test's end\n"
+        "  -L, --print-file-size          Print file size after test's end\n"
         "  -Y, --stat-file                Print file stat\n"
+        "  -Z, --unlink-file              Unlink file after test\n"
         "  -d, --debug                    Debug on (false - default)\n"
         "  -h, --help                     Print this help\n" << prog << endl;
 }
@@ -1271,6 +1332,7 @@ static int mainGetopt(int argc, char *argv[],
         bool &async_sync_test,
         bool &print_file_size,
         bool &stat_file,
+        bool &unlink_file,
         eTestType &test_type,
         bool &debug)
 {
@@ -1278,7 +1340,7 @@ static int mainGetopt(int argc, char *argv[],
     int ret = -1;
 
     while (1) {
-        static char short_options[] = "c:s:a:m:n:l:i:z:t:w:q:dhOSPAMRWZY";
+        static char short_options[] = "c:s:a:m:n:l:i:z:t:w:q:dhOSPAMRWLZY";
         static struct option long_options[] = {
             {"spdk-conf",               1, 0, 'c'},
             {"sync-file",               1, 0, 's'},
@@ -1298,7 +1360,8 @@ static int mainGetopt(int argc, char *argv[],
             {"async-sync-test",         0, 0, 'M'},
             {"read-test",               0, 0, 'R'},
             {"write-test",              0, 0, 'W'},
-            {"print-file-size",         0, 0, 'Z'},
+            {"print-file-size",         0, 0, 'L'},
+            {"unlink-file",             0, 0, 'Z'},
             {"stat-file",               0, 0, 'Y'},
             {"debug",                   0, 0, 'd'},
             {"help",                    0, 0, 'h'},
@@ -1384,12 +1447,16 @@ static int mainGetopt(int argc, char *argv[],
             test_type = eWriteTest;
             break;
 
-        case 'Z':
+        case 'L':
             print_file_size = true;
             break;
 
         case 'Y':
             stat_file = true;
+            break;
+
+        case 'Z':
+            unlink_file = true;
             break;
 
         case 'd':
@@ -1420,6 +1487,7 @@ struct ThreadArgs {
     size_t m_q;
     bool print_file_size;
     bool stat_file;
+    bool unlink_file;
     IoStats stats;
     int rc;
 };
@@ -1427,28 +1495,28 @@ struct ThreadArgs {
 static void AsyncWriteIoTestRunner(ThreadArgs *targs) {
     int rc = AsyncWriteIoTest(targs->api, targs->file.c_str(),
         targs->int_check, targs->l_cnt, targs->out_l_cnt, 
-        targs->max_ios_m, targs->min_ios_m, targs->m_q, targs->print_file_size, targs->stat_file, &targs->stats);
+        targs->max_ios_m, targs->min_ios_m, targs->m_q, targs->print_file_size, targs->stat_file, targs->unlink_file, &targs->stats);
     targs->rc = rc;
 }
 
 static void AsyncSyncWriteIoTestRunner(ThreadArgs *targs) {
     int rc = AsyncSyncWriteIoTest(targs->api, targs->file.c_str(),
         targs->int_check, targs->l_cnt, targs->out_l_cnt,
-        targs->max_ios_m, targs->min_ios_m, targs->m_q, targs->print_file_size, targs->stat_file, &targs->stats);
+        targs->max_ios_m, targs->min_ios_m, targs->m_q, targs->print_file_size, targs->stat_file, targs->unlink_file, &targs->stats);
     targs->rc = rc;
 }
 
 static void AsyncReadIoTestRunner(ThreadArgs *targs) {
     int rc = AsyncReadIoTest(targs->api, targs->file.c_str(),
         targs->int_check, targs->l_cnt, targs->out_l_cnt,
-        targs->max_ios_m, targs->min_ios_m, targs->m_q, targs->print_file_size, targs->stat_file, &targs->stats);
+        targs->max_ios_m, targs->min_ios_m, targs->m_q, targs->print_file_size, targs->stat_file, targs->unlink_file, &targs->stats);
     targs->rc = rc;
 }
 
 static void AsyncSyncReadIoTestRunner(ThreadArgs *targs) {
     int rc = AsyncSyncReadIoTest(targs->api, targs->file.c_str(),
         targs->int_check, targs->l_cnt, targs->out_l_cnt,
-        targs->max_ios_m, targs->min_ios_m, targs->m_q, targs->print_file_size, targs->stat_file, &targs->stats);
+        targs->max_ios_m, targs->min_ios_m, targs->m_q, targs->print_file_size, targs->stat_file, targs->unlink_file, &targs->stats);
     targs->rc = rc;
 }
 
@@ -1472,6 +1540,7 @@ int main(int argc, char **argv) {
     bool integrity_check = false;
     bool print_file_size = false;
     bool stat_file = false;
+    bool unlink_file = false;
 
     bool open_close_test = false;
     bool sync_test = false;
@@ -1499,6 +1568,7 @@ int main(int argc, char **argv) {
             async_sync_test,
             print_file_size,
             stat_file,
+            unlink_file,
             test_type,
             debug);
     if (ret) {
@@ -1574,6 +1644,7 @@ int main(int argc, char **argv) {
                 min_iosize_mult,
                 print_file_size,
                 stat_file,
+                unlink_file,
                 &iostats);
             if (rc)
                 cerr << "SyncWriteIoTest failed rc: " << rc << endl;
@@ -1594,6 +1665,7 @@ int main(int argc, char **argv) {
                 min_iosize_mult,
                 print_file_size,
                 stat_file,
+                unlink_file,
                 &iostats);
             if (rc)
                 cerr << "SyncPwriteIoTest failed rc: " << rc << endl;
@@ -1610,7 +1682,7 @@ int main(int argc, char **argv) {
                 memset(&iostats, '\0', sizeof(iostats));
                 rc = AsyncWriteIoTest(asyncApi, async_file.c_str(),
                     integrity_check, loop_count, out_loop_count,
-                    max_iosize_mult, min_iosize_mult, max_queued, print_file_size, stat_file, &iostats);
+                    max_iosize_mult, min_iosize_mult, max_queued, print_file_size, stat_file, unlink_file, &iostats);
                 if (rc)
                     cerr << "AsyncWriteIoTest failed rc: " << rc << endl;
                 else
@@ -1628,7 +1700,7 @@ int main(int argc, char **argv) {
                     string async_f = async_file + to_string(i);
                     thread_args[i] = new ThreadArgs{asyncApi, async_f, integrity_check,
                         loop_count, out_loop_count,
-                        max_iosize_mult, min_iosize_mult, max_queued, print_file_size, stat_file};
+                        max_iosize_mult, min_iosize_mult, max_queued, print_file_size, stat_file, unlink_file};
                     threads[i] = new thread(&AsyncWriteIoTestRunner, thread_args[i]);
                 }
 
@@ -1657,7 +1729,7 @@ int main(int argc, char **argv) {
                 memset(&iostats, '\0', sizeof(iostats));
                 rc = AsyncSyncWriteIoTest(asyncApi, async_file.c_str(),
                     integrity_check, loop_count, out_loop_count,
-                    max_iosize_mult, min_iosize_mult, max_queued, print_file_size, stat_file, &iostats);
+                    max_iosize_mult, min_iosize_mult, max_queued, print_file_size, stat_file, unlink_file, &iostats);
                 if (rc)
                     cerr << "AsyncSyncWriteIoTest failed rc: " << rc << endl;
                 else
@@ -1675,7 +1747,7 @@ int main(int argc, char **argv) {
                     string async_f = async_file + to_string(i);
                     thread_args[i] = new ThreadArgs{asyncApi, async_f, integrity_check,
                         loop_count, out_loop_count,
-                        max_iosize_mult, min_iosize_mult, max_queued, print_file_size, stat_file};
+                        max_iosize_mult, min_iosize_mult, max_queued, print_file_size, stat_file, unlink_file};
                     threads[i] = new thread(&AsyncSyncWriteIoTestRunner, thread_args[i]);
                 }
 
@@ -1708,6 +1780,7 @@ int main(int argc, char **argv) {
             min_iosize_mult,
             print_file_size,
             stat_file,
+            unlink_file,
             &iostats);
         if (rc)
             cerr << "SyncReadIoTest failed rc: " << rc << endl;
@@ -1728,6 +1801,7 @@ int main(int argc, char **argv) {
             min_iosize_mult,
             print_file_size,
             stat_file,
+            unlink_file,
             &iostats);
         if (rc)
             cerr << "SyncPreadIoTest failed rc: " << rc << endl;
@@ -1744,7 +1818,7 @@ int main(int argc, char **argv) {
                 memset(&iostats, '\0', sizeof(iostats));
                 rc = AsyncReadIoTest(asyncApi, async_file.c_str(),
                     integrity_check, loop_count, out_loop_count,
-                    max_iosize_mult, min_iosize_mult, max_queued, print_file_size, stat_file, &iostats);
+                    max_iosize_mult, min_iosize_mult, max_queued, print_file_size, stat_file, unlink_file, &iostats);
                 if (rc)
                     cerr << "AsyncReadIoTest failed rc: " << rc << endl;
                 else
@@ -1762,7 +1836,7 @@ int main(int argc, char **argv) {
                     string async_f = async_file + to_string(i);
                     thread_args[i] = new ThreadArgs{asyncApi, async_f, integrity_check,
                         loop_count, out_loop_count,
-                        max_iosize_mult, min_iosize_mult, max_queued, print_file_size, stat_file};
+                        max_iosize_mult, min_iosize_mult, max_queued, print_file_size, stat_file, unlink_file};
                     threads[i] = new thread(&AsyncReadIoTestRunner, thread_args[i]);
                 }
 
@@ -1791,7 +1865,7 @@ int main(int argc, char **argv) {
                 memset(&iostats, '\0', sizeof(iostats));
                 rc = AsyncSyncReadIoTest(asyncApi, async_file.c_str(),
                     integrity_check, loop_count, out_loop_count,
-                    max_iosize_mult, min_iosize_mult, max_queued, print_file_size, stat_file, &iostats);
+                    max_iosize_mult, min_iosize_mult, max_queued, print_file_size, stat_file, unlink_file, &iostats);
                 if (rc)
                     cerr << "AsyncSyncReadIoTest failed rc: " << rc << endl;
                 else
@@ -1809,7 +1883,7 @@ int main(int argc, char **argv) {
                     string async_f = async_file + to_string(i);
                     thread_args[i] = new ThreadArgs{asyncApi, async_f, integrity_check,
                         loop_count, out_loop_count,
-                        max_iosize_mult, min_iosize_mult, max_queued, print_file_size, stat_file};
+                        max_iosize_mult, min_iosize_mult, max_queued, print_file_size, stat_file, unlink_file};
                     threads[i] = new thread(&AsyncSyncReadIoTestRunner, thread_args[i]);
                 }
 

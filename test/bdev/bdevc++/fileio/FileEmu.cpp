@@ -56,8 +56,7 @@ FileEmu::FileEmu(const char *_name, int _flags, mode_t _mode, uint64_t _size)
         desc = fd;
 }
 
-FileEmu::~FileEmu() {
-}
+FileEmu::~FileEmu() {}
 
 
 int FileEmu::stat(struct stat *buf) {
@@ -118,7 +117,7 @@ FileMap::FileMap(size_t size)
     files.resize(size);
     ::memset(fileMap, '\0', sizeof(fileMap));
 
-    savedFiles.open("/tmp/emu.saved.files");
+    savedFiles.open("/tmp/emu.saved.files", fstream::in | fstream::out | fstream::app);
     initFromSavedFiles();
 }
 
@@ -126,21 +125,78 @@ FileMap::~FileMap() {
     savedFiles.close();
 }
 
+int FileMap::unlinkFile(const char *path) {
+    if (!path)
+        return -1;
+
+    unique_lock<Lock> w_lock(opMutex);
+
+    FileEmu *feNieladnie = 0;
+    for (size_t i = 0 ; i < files.size() ; i++) {
+        if (files[i] && (files[i]->name == basename(path) || files[i]->name == path)) {
+            feNieladnie = files[i];
+            files[i] = 0;
+            break;
+        }
+    }
+
+    for (size_t i = 0 ; i < closedFiles.size() ; i++)
+        if (closedFiles[i] && (closedFiles[i]->name == basename(path) || closedFiles[i]->name == path)) {
+            closedFiles.erase(closedFiles.begin() + i);
+            break;
+        }
+
+    if (!feNieladnie)
+        return -1;
+
+    addSavedFiles(feNieladnie, 0);
+    delete feNieladnie;
+
+    return 0;
+}
+
 void FileMap::initFromSavedFiles() {
+    unique_lock<Lock> w_lock(opMutex);
+
+    savedFiles.seekp(0);
+
     while (true) {
-        if (savedFiles.eof())
+        if (savedFiles.eof() == true)
             break;
 
-        FileEmu *emu = new FileEmu("", 0, 0);
+        int exists = 1;
+        FileEmu *emu = new FileEmu("asd090a9si0i09i0adddds_+09asd", 0, 0);
         savedFiles >> emu->name >>
             emu->fileSlot >>
             emu->size >>
             emu->geom.startLba >>
             emu->geom.endLba >>
             emu->geom.startLun >>
-            emu->geom.numLuns;
+            emu->geom.numLuns >>
+            exists;
 
-        updateClosedFiles(emu);
+        if (savedFiles.eof() == true)
+            break;
+
+        if (exists) {
+            emu->state = FileEmu::eClosed;
+            updateClosedFiles(emu);
+        } else {
+            removeFromClosedFiles(emu);
+            delete emu;
+        }
+    }
+
+    savedFiles.seekp(ios_base::end);
+    savedFiles.clear();
+}
+
+void FileMap::removeFromClosedFiles(const FileEmu *fileEmu) {
+    for (size_t i = 0 ; i < closedFiles.size() ; i++) {
+        if (closedFiles[i]->name == fileEmu->name && closedFiles[i]->fileSlot == fileEmu->fileSlot) {
+            closedFiles.erase(closedFiles.begin() + i);
+            return;
+        }
     }
 }
 
@@ -251,13 +307,12 @@ int FileMap::closeFile(int desc) {
 
     femu->state = FileEmu::eClosed;
     FileEmu *closedFile = searchClosedFiles(femu->name);
-    if (!closedFile) {
+    if (!closedFile)
         closedFiles.push_back(femu);
-        addSavedFiles(femu);
-    } else {
+    else
         closedFile->size = femu->size;
-        updateSavedFiles(femu);
-    }
+
+    addSavedFiles(femu, 1);
 
     files[desc] = 0;
     return 0;
@@ -271,24 +326,15 @@ FileEmu *FileMap::searchClosedFiles(const std::string &name) {
     return 0;
 }
 
-void FileMap::addSavedFiles(const FileEmu *fileEmu) {
+void FileMap::addSavedFiles(const FileEmu *fileEmu, int exists) {
     savedFiles << fileEmu->name << " " <<
             fileEmu->fileSlot << " " <<
             fileEmu->size << " " <<
             fileEmu->geom.startLba << " " <<
             fileEmu->geom.endLba << " " <<
-            fileEmu->geom.startLun << " " <<
-            fileEmu->geom.numLuns << endl << flush;
-}
-
-void FileMap::updateSavedFiles(FileEmu *fileEmu) {
-    savedFiles << fileEmu->name << " " <<
-            fileEmu->fileSlot << " " <<
-            fileEmu->size << " " <<
-            fileEmu->geom.startLba << " " <<
-            fileEmu->geom.endLba << " " <<
-            fileEmu->geom.startLun << " " <<
-            fileEmu->geom.numLuns << endl << flush;
+            static_cast<int>(fileEmu->geom.startLun) << " " <<
+            static_cast<int>(fileEmu->geom.numLuns) << " " <<
+            exists << endl << flush;
 }
 
 FileMap &FileMap::getInstance() {

@@ -133,4 +133,11 @@ int ApiBase::stat(const char *path, struct stat *buf) {
     return femu->stat(buf);
 }
 
+int ApiBase::unlink(const char *path) {
+    int ret = FileMap::getInstance().unlinkFile(path);
+    if (!ret)
+        ::unlink(path);
+    return ret;
+}
+
 } // namespace BdevCpp

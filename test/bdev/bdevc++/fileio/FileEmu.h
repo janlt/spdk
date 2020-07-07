@@ -84,12 +84,13 @@ class FileMap {
     int putFile(FileEmu *fileEmu, uint64_t numBlk, uint32_t numLun);
     void setBottomSlot(uint32_t start);
     int closeFile(int desc);
+    int unlinkFile(const char *path);
     FileEmu *searchClosedFiles(const std::string &name);
 
-    void addSavedFiles(const FileEmu *fileEmu);
-    void updateSavedFiles(FileEmu *fileEmu);
+    void addSavedFiles(const FileEmu *fileEmu, int exists);
     void initFromSavedFiles();
     void updateClosedFiles(FileEmu *fileEmu);
+    void removeFromClosedFiles(const FileEmu *fileEmu);
 
     static FileMap &getInstance();
 

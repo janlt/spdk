@@ -39,6 +39,7 @@ class AsyncApi : public ApiBase {
     off_t lseek(int fd, off_t offset, int whence);
     int fsync(int desc);
     int stat(const char *path, struct stat *buf);
+    int unlink(const char *path);
 
     virtual int pread(int desc, char *buffer, size_t bufferSize, off_t offset);
     virtual int pwrite(int desc, const char *data, size_t dataSize, off_t offset);

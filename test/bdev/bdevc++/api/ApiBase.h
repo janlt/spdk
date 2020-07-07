@@ -40,6 +40,7 @@ class ApiBase {
     virtual off_t lseek(int fd, off_t offset, int whence) = 0;
     virtual int fsync(int desc) = 0;
     virtual int stat(const char *path, struct stat *buf) = 0;
+    virtual int unlink(const char *path) = 0;
 
     virtual int pread(int desc, char *buffer, size_t bufferSize, off_t offset) = 0;
     virtual int pwrite(int desc, const char *data, size_t dataSize, off_t offset) = 0;

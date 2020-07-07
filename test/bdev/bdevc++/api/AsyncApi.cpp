@@ -114,6 +114,10 @@ int AsyncApi::stat(const char *path, struct stat *buf) {
     return ApiBase::stat(path, buf);
 }
 
+int AsyncApi::unlink(const char *path) {
+    return ApiBase::unlink(path);
+}
+
 FutureBase *AsyncApi::read(int desc, uint64_t pos, char *buffer, size_t bufferSize, bool polling) {
     uint64_t lba;
     uint8_t lun;
