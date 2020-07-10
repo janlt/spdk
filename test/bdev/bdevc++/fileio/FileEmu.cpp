@@ -312,6 +312,7 @@ int FileMap::putFile(FileEmu *fileEmu, uint64_t numBlk, uint32_t numLun) {
         fileEmu->geom.startLba = numBlk/maxFiles * freeSlot;
         fileEmu->geom.endLba = numBlk/maxFiles * (freeSlot + 1);
         fileEmu->geom.numLuns = numLun;
+        startLun++;
         fileEmu->geom.startLun = startLun%numLun;
     } else {
         fileEmu->size = closedFile->size;
@@ -334,7 +335,6 @@ int FileMap::putFile(FileEmu *fileEmu, uint64_t numBlk, uint32_t numLun) {
 
     }
 
-    startLun++;
     fileEmu->fileSlot = freeSlot;
     fileEmu->state = FileEmu::eOpened;
 
