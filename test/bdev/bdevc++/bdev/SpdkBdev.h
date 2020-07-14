@@ -175,6 +175,8 @@ class SpdkBdev : public SpdkDevice {
     uint32_t maxCacheIoBufs;
     uint32_t ioBufsInUse;
 
+    static int ioBufMgrInst;
+
     SpdkIoBufMgr *ioPoolMgr;
 
   private:

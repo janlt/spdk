@@ -605,8 +605,8 @@ static int SyncPreadIoTest(BdevCpp::SyncApi *api,
 //
 // Async IO test
 //
-const size_t maxWriteFutures = 256;
-const size_t maxReadFutures = 256;
+const size_t maxWriteFutures = 1024;
+const size_t maxReadFutures = 1024;
 
 static int AsyncIoCompleteWrites(BdevCpp::AsyncApi *api,
         size_t &write_ios,

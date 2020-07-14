@@ -62,12 +62,14 @@ const std::string DEFAULT_SPDK_CONF_FILE = "spdk.conf";
 SpdkDeviceClass SpdkBdev::bdev_class = SpdkDeviceClass::BDEV;
 size_t SpdkBdev::cpuCoreCounter = SpdkBdev::cpuCoreStart;
 
+int SpdkBdev::ioBufMgrInst = 0;
+
 SpdkBdev::SpdkBdev(bool enableStats)
     : state(SpdkBdevState::SPDK_BDEV_INIT), _spdkPoller(0), confBdevNum(-1),
       cpuCore(SpdkBdev::getCoreNum()), cpuCoreFin(cpuCore + 1),
       cpuCoreIoEng(cpuCoreFin + 1), ioEngine(0), ioEngineThread(0),
       io2(0), io2Thread(0), ioEngineInitDone(0), maxIoBufs(0), maxCacheIoBufs(0), ioBufsInUse(0),
-      ioPoolMgr(SpdkIoBufMgr::getSpdkIoBufMgr()), isRunning(0), statsEnabled(enableStats) {}
+      ioPoolMgr(new SpdkIoBufMgr(ioBufMgrInst++)), isRunning(0), statsEnabled(enableStats) {}
 
 SpdkBdev::~SpdkBdev() {
     if (io2Thread != nullptr)
@@ -79,6 +81,8 @@ SpdkBdev::~SpdkBdev() {
         ioEngineThread->join();
     if (ioEngine)
         delete ioEngine;
+
+    delete ioPoolMgr;
 }
 
 size_t SpdkBdev::getCoreNum() {

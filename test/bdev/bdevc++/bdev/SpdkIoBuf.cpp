@@ -31,7 +31,7 @@ SpdkIoBuf *SpdkIoBufMgr::getIoWriteBuf(uint32_t ioSize, uint32_t align) {
             buf->setSpdkDmaBuf(
                 spdk_dma_zmalloc(static_cast<size_t>(block[bufIdx]->getBufSize()), align, NULL));
     } else {
-        buf = new SpdkIoSizedBuf<1 << 16>(1 << 16, -1);
+        buf = new SpdkIoSizedBuf<1 << 16, 0>(1 << 16, -1);
         buf->setSpdkDmaBuf(
             spdk_dma_zmalloc(static_cast<size_t>(ioSize), align, NULL));
     }
@@ -55,7 +55,7 @@ SpdkIoBuf *SpdkIoBufMgr::getIoReadBuf(uint32_t ioSize, uint32_t align) {
             buf->setSpdkDmaBuf(
                 spdk_dma_zmalloc(static_cast<size_t>(block[bufIdx]->getBufSize()), align, NULL));
     } else {
-        buf = new SpdkIoSizedBuf<1 << 16>(1 << 16, -1);
+        buf = new SpdkIoSizedBuf<1 << 16, 0>(1 << 16, -1);
         buf->setSpdkDmaBuf(
             spdk_dma_zmalloc(static_cast<size_t>(ioSize), align, NULL));
     }
@@ -87,15 +87,89 @@ void SpdkIoBufMgr::putSpdkIoBufMgr() {
     }
 }
 
-SpdkIoBufMgr::SpdkIoBufMgr() {
-    block[0] = new SpdkIoSizedBuf<4096>(4096, 0);
-    block[1] = new SpdkIoSizedBuf<2 * 4096>(2 * 4096, 1);
-    block[2] = new SpdkIoSizedBuf<3 * 4096>(3 * 4096, 2);
-    block[3] = new SpdkIoSizedBuf<4 * 4096>(4 * 4096, 3);
-    block[4] = new SpdkIoSizedBuf<5 * 4096>(5 * 4096, 4);
-    block[5] = new SpdkIoSizedBuf<6 * 4096>(6 * 4096, 5);
-    block[6] = new SpdkIoSizedBuf<7 * 4096>(7 * 4096, 6);
-    block[7] = new SpdkIoSizedBuf<8 * 4096>(8 * 4096, 7);
+SpdkIoBufMgr::SpdkIoBufMgr(int inst) {
+    switch (inst) {
+    case 0:
+        block[0] = new SpdkIoSizedBuf<4096, 0>(4096, 0);
+        block[1] = new SpdkIoSizedBuf<2 * 4096, 0>(2 * 4096, 1);
+        block[2] = new SpdkIoSizedBuf<3 * 4096, 0>(3 * 4096, 2);
+        block[3] = new SpdkIoSizedBuf<4 * 4096, 0>(4 * 4096, 3);
+        block[4] = new SpdkIoSizedBuf<5 * 4096, 0>(5 * 4096, 4);
+        block[5] = new SpdkIoSizedBuf<6 * 4096, 0>(6 * 4096, 5);
+        block[6] = new SpdkIoSizedBuf<7 * 4096, 0>(7 * 4096, 6);
+        block[7] = new SpdkIoSizedBuf<8 * 4096, 0>(8 * 4096, 7);
+        break;
+    case 1:
+        block[0] = new SpdkIoSizedBuf<4096, 1>(4096, 0);
+        block[1] = new SpdkIoSizedBuf<2 * 4096, 1>(2 * 4096, 1);
+        block[2] = new SpdkIoSizedBuf<3 * 4096, 1>(3 * 4096, 2);
+        block[3] = new SpdkIoSizedBuf<4 * 4096, 1>(4 * 4096, 3);
+        block[4] = new SpdkIoSizedBuf<5 * 4096, 1>(5 * 4096, 4);
+        block[5] = new SpdkIoSizedBuf<6 * 4096, 1>(6 * 4096, 5);
+        block[6] = new SpdkIoSizedBuf<7 * 4096, 1>(7 * 4096, 6);
+        block[7] = new SpdkIoSizedBuf<8 * 4096, 1>(8 * 4096, 7);
+        break;
+    case 2:
+        block[0] = new SpdkIoSizedBuf<4096, 2>(4096, 0);
+        block[1] = new SpdkIoSizedBuf<2 * 4096, 2>(2 * 4096, 1);
+        block[2] = new SpdkIoSizedBuf<3 * 4096, 2>(3 * 4096, 2);
+        block[3] = new SpdkIoSizedBuf<4 * 4096, 2>(4 * 4096, 3);
+        block[4] = new SpdkIoSizedBuf<5 * 4096, 2>(5 * 4096, 4);
+        block[5] = new SpdkIoSizedBuf<6 * 4096, 2>(6 * 4096, 5);
+        block[6] = new SpdkIoSizedBuf<7 * 4096, 2>(7 * 4096, 6);
+        block[7] = new SpdkIoSizedBuf<8 * 4096, 2>(8 * 4096, 7);
+        break;
+    case 3:
+        block[0] = new SpdkIoSizedBuf<4096, 3>(4096, 0);
+        block[1] = new SpdkIoSizedBuf<2 * 4096, 3>(2 * 4096, 1);
+        block[2] = new SpdkIoSizedBuf<3 * 4096, 3>(3 * 4096, 2);
+        block[3] = new SpdkIoSizedBuf<4 * 4096, 3>(4 * 4096, 3);
+        block[4] = new SpdkIoSizedBuf<5 * 4096, 3>(5 * 4096, 4);
+        block[5] = new SpdkIoSizedBuf<6 * 4096, 3>(6 * 4096, 5);
+        block[6] = new SpdkIoSizedBuf<7 * 4096, 3>(7 * 4096, 6);
+        block[7] = new SpdkIoSizedBuf<8 * 4096, 3>(8 * 4096, 7);
+        break;
+    case 4:
+        block[0] = new SpdkIoSizedBuf<4096, 4>(4096, 0);
+        block[1] = new SpdkIoSizedBuf<2 * 4096, 4>(2 * 4096, 1);
+        block[2] = new SpdkIoSizedBuf<3 * 4096, 4>(3 * 4096, 2);
+        block[3] = new SpdkIoSizedBuf<4 * 4096, 4>(4 * 4096, 3);
+        block[4] = new SpdkIoSizedBuf<5 * 4096, 4>(5 * 4096, 4);
+        block[5] = new SpdkIoSizedBuf<6 * 4096, 4>(6 * 4096, 5);
+        block[6] = new SpdkIoSizedBuf<7 * 4096, 4>(7 * 4096, 6);
+        block[7] = new SpdkIoSizedBuf<8 * 4096, 4>(8 * 4096, 7);
+        break;
+    case 5:
+        block[0] = new SpdkIoSizedBuf<4096, 5>(4096, 0);
+        block[1] = new SpdkIoSizedBuf<2 * 4096, 5>(2 * 4096, 1);
+        block[2] = new SpdkIoSizedBuf<3 * 4096, 5>(3 * 4096, 2);
+        block[3] = new SpdkIoSizedBuf<4 * 4096, 5>(4 * 4096, 3);
+        block[4] = new SpdkIoSizedBuf<5 * 4096, 5>(5 * 4096, 4);
+        block[5] = new SpdkIoSizedBuf<6 * 4096, 5>(6 * 4096, 5);
+        block[6] = new SpdkIoSizedBuf<7 * 4096, 5>(7 * 4096, 6);
+        block[7] = new SpdkIoSizedBuf<8 * 4096, 5>(8 * 4096, 7);
+        break;
+    case 6:
+        block[0] = new SpdkIoSizedBuf<4096, 6>(4096, 0);
+        block[1] = new SpdkIoSizedBuf<2 * 4096, 6>(2 * 4096, 1);
+        block[2] = new SpdkIoSizedBuf<3 * 4096, 6>(3 * 4096, 2);
+        block[3] = new SpdkIoSizedBuf<4 * 4096, 6>(4 * 4096, 3);
+        block[4] = new SpdkIoSizedBuf<5 * 4096, 6>(5 * 4096, 4);
+        block[5] = new SpdkIoSizedBuf<6 * 4096, 6>(6 * 4096, 5);
+        block[6] = new SpdkIoSizedBuf<7 * 4096, 6>(7 * 4096, 6);
+        block[7] = new SpdkIoSizedBuf<8 * 4096, 6>(8 * 4096, 7);
+        break;
+    case 7:
+        block[0] = new SpdkIoSizedBuf<4096, 7>(4096, 0);
+        block[1] = new SpdkIoSizedBuf<2 * 4096, 7>(2 * 4096, 1);
+        block[2] = new SpdkIoSizedBuf<3 * 4096, 7>(3 * 4096, 2);
+        block[3] = new SpdkIoSizedBuf<4 * 4096, 7>(4 * 4096, 3);
+        block[4] = new SpdkIoSizedBuf<5 * 4096, 7>(5 * 4096, 4);
+        block[5] = new SpdkIoSizedBuf<6 * 4096, 7>(6 * 4096, 5);
+        block[6] = new SpdkIoSizedBuf<7 * 4096, 7>(7 * 4096, 6);
+        block[7] = new SpdkIoSizedBuf<8 * 4096, 7>(8 * 4096, 7);
+        break;
+    }
 }
 
 } // namespace BdevCpp

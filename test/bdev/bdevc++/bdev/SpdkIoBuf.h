@@ -41,7 +41,7 @@ class SpdkIoBuf {
     virtual void setAttribs(uint32_t _bufSize, int _backIdx) = 0;
 };
 
-template <uint32_t Size> class SpdkIoSizedBuf : public SpdkIoBuf {
+template <uint32_t Size, int Inst> class SpdkIoSizedBuf : public SpdkIoBuf {
     friend class SpdkIoBufMgr;
 
   public:
@@ -71,72 +71,72 @@ template <uint32_t Size> class SpdkIoSizedBuf : public SpdkIoBuf {
         readPool;
 };
 
-template <uint32_t Size>
-SpdkIoSizedBuf<Size>::SpdkIoSizedBuf(uint32_t _bufSize, int _backIdx)
+template <uint32_t Size, int Inst>
+SpdkIoSizedBuf<Size, Inst>::SpdkIoSizedBuf(uint32_t _bufSize, int _backIdx)
     : spdkDmaBuf(0), bufSize(_bufSize), backIdx(_backIdx) {}
 
-template <uint32_t Size> SpdkIoSizedBuf<Size>::~SpdkIoSizedBuf() {
+template <uint32_t Size, int Inst> SpdkIoSizedBuf<Size, Inst>::~SpdkIoSizedBuf() {
     if (getSpdkDmaBuf())
         spdk_dma_free(getSpdkDmaBuf());
 }
 
-template <uint32_t Size> SpdkIoBuf *SpdkIoSizedBuf<Size>::getWriteBuf() {
+template <uint32_t Size, int Inst> SpdkIoBuf *SpdkIoSizedBuf<Size, Inst>::getWriteBuf() {
     return writePool.get();
 }
 
-template <uint32_t Size>
-void SpdkIoSizedBuf<Size>::putWriteBuf(SpdkIoBuf *ioBuf) {
-    writePool.put(dynamic_cast<SpdkIoSizedBuf<Size> *>(ioBuf));
+template <uint32_t Size, int Inst>
+void SpdkIoSizedBuf<Size, Inst>::putWriteBuf(SpdkIoBuf *ioBuf) {
+    writePool.put(dynamic_cast<SpdkIoSizedBuf<Size, Inst> *>(ioBuf));
 }
 
-template <uint32_t Size> SpdkIoBuf *SpdkIoSizedBuf<Size>::getReadBuf() {
+template <uint32_t Size, int Inst> SpdkIoBuf *SpdkIoSizedBuf<Size, Inst>::getReadBuf() {
     return readPool.get();
 }
 
-template <uint32_t Size>
-void SpdkIoSizedBuf<Size>::putReadBuf(SpdkIoBuf *ioBuf) {
-    readPool.put(dynamic_cast<SpdkIoSizedBuf<Size> *>(ioBuf));
+template <uint32_t Size, int Inst>
+void SpdkIoSizedBuf<Size, Inst>::putReadBuf(SpdkIoBuf *ioBuf) {
+    readPool.put(dynamic_cast<SpdkIoSizedBuf<Size, Inst> *>(ioBuf));
 }
 
-template <uint32_t Size> char *SpdkIoSizedBuf<Size>::getSpdkDmaBuf() {
+template <uint32_t Size, int Inst> char *SpdkIoSizedBuf<Size, Inst>::getSpdkDmaBuf() {
     return reinterpret_cast<char *>(spdkDmaBuf);
 }
 
-template <uint32_t Size>
-void SpdkIoSizedBuf<Size>::setSpdkDmaBuf(void *spdkBuf) {
+template <uint32_t Size, int Inst>
+void SpdkIoSizedBuf<Size, Inst>::setSpdkDmaBuf(void *spdkBuf) {
     spdkDmaBuf = spdkBuf;
 }
 
-template <uint32_t Size> int SpdkIoSizedBuf<Size>::getIdx() { return backIdx; }
+template <uint32_t Size, int Inst> int SpdkIoSizedBuf<Size, Inst>::getIdx() { return backIdx; }
 
-template <uint32_t Size> void SpdkIoSizedBuf<Size>::setIdx(int idx) {
+template <uint32_t Size, int Inst> void SpdkIoSizedBuf<Size, Inst>::setIdx(int idx) {
     backIdx = idx;
 }
 
-template <uint32_t Size> uint32_t SpdkIoSizedBuf<Size>::getBufSize() {
+template <uint32_t Size, int Inst> uint32_t SpdkIoSizedBuf<Size, Inst>::getBufSize() {
     return bufSize;
 }
 
-template <uint32_t Size> void SpdkIoSizedBuf<Size>::setAttribs(uint32_t _bufSize, int _backIdx) {
+template <uint32_t Size, int Inst> void SpdkIoSizedBuf<Size, Inst>::setAttribs(uint32_t _bufSize, int _backIdx) {
     bufSize = _bufSize;
     backIdx = _backIdx;
 }
 
 
 
-template <uint32_t Size>
-BdevCpp::GeneralPool<SpdkIoSizedBuf<Size>,
-                   BdevCpp::ClassAlloc<SpdkIoSizedBuf<Size>>>
-    SpdkIoSizedBuf<Size>::writePool(queueDepth, "writeSpdkIoBufPool");
+template <uint32_t Size, int Inst>
+BdevCpp::GeneralPool<SpdkIoSizedBuf<Size, Inst>,
+                   BdevCpp::ClassAlloc<SpdkIoSizedBuf<Size, Inst>>>
+    SpdkIoSizedBuf<Size, Inst>::writePool(queueDepth, "writeSpdkIoBufPool");
 
-template <uint32_t Size>
-BdevCpp::GeneralPool<SpdkIoSizedBuf<Size>,
-                   BdevCpp::ClassAlloc<SpdkIoSizedBuf<Size>>>
-    SpdkIoSizedBuf<Size>::readPool(queueDepth, "readSpdkIoBufPool");
+template <uint32_t Size, int Inst>
+BdevCpp::GeneralPool<SpdkIoSizedBuf<Size, Inst>,
+                   BdevCpp::ClassAlloc<SpdkIoSizedBuf<Size, Inst>>>
+    SpdkIoSizedBuf<Size, Inst>::readPool(queueDepth, "readSpdkIoBufPool");
 
 class SpdkIoBufMgr {
   public:
-    SpdkIoBufMgr();
+    SpdkIoBufMgr(int inst = 0);
     virtual ~SpdkIoBufMgr();
 
     SpdkIoBuf *getIoWriteBuf(uint32_t ioSize, uint32_t align);
