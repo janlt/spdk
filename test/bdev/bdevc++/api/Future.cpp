@@ -65,19 +65,22 @@ GeneralPool<ReadFuture, ClassAlloc<ReadFuture>> ReadFuture::readFuturePool(100, 
 GeneralPool<WriteFuture, ClassAlloc<WriteFuture>> WriteFuture::writeFuturePool(100, "writeFuturePool");
 
 ReadFuture::ReadFuture(char *_buffer, size_t _bufferSize)
-: buffer(_buffer), bufferSize(_bufferSize) {}
+: buffer(_buffer), bufferSize(_bufferSize), ready(false) {}
 
 ReadFuture::~ReadFuture() {}
 
 int ReadFuture::get(char *&data, size_t &_dataSize, unsigned long long _timeout) {
     unique_lock<mutex> lk(mtx);
     const chrono::milliseconds timeout(_timeout);
-    cv.wait_for(lk, timeout, [this] { return !opStatus; });
-    if (opStatus)
-        return -1;
+    if (cv.wait_for(lk, timeout, [this] { return !opStatus; }) == false) {
+        opStatus = -1;
+        lk.unlock();
+        return opStatus;
+    }
 
     data = buffer;
     _dataSize = bufferSize;
+    lk.unlock();
     return opStatus;
 }
 
@@ -86,6 +89,8 @@ void ReadFuture::signal(StatusCode status, const char *data, size_t _dataSize) {
     opStatus = (status == StatusCode::OK) ? 0 : -1;
     if (!opStatus)
         ::memcpy(buffer, data, _dataSize);
+    ready = true;
+    lck.unlock();
     cv.notify_all();
 }
 
@@ -97,18 +102,21 @@ void ReadFuture::sink() {
 
 
 WriteFuture::WriteFuture(size_t _dataSize)
-    : dataSize(_dataSize) {}
+    : dataSize(_dataSize), ready(false) {}
 
 WriteFuture::~WriteFuture() {}
 
 int WriteFuture::get(char *&data, size_t &_dataSize, unsigned long long _timeout) {
     unique_lock<mutex> lk(mtx);
     const chrono::milliseconds timeout(_timeout);
-    cv.wait_for(lk, timeout, [this] { return !opStatus; });
-    if (opStatus)
-        return -1;
+    if (cv.wait_for(lk, timeout, [this] { return ready; }) == false) {
+        opStatus = -1;
+        lk.unlock();
+        return opStatus;
+    }
 
     _dataSize = dataSize;
+    lk.unlock();
     return opStatus;
 }
 
@@ -116,6 +124,8 @@ void WriteFuture::signal(StatusCode status, const char *data, size_t _dataSize) 
     unique_lock<mutex> lck(mtx);
     dataSize = _dataSize;
     opStatus = (status == StatusCode::OK) ? 0 : -1;
+    ready = true;
+    lck.unlock();
     cv.notify_all();
 }
 

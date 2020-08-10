@@ -44,11 +44,14 @@ friend class ClassAlloc<ReadFuture>;
     }
     void setDataSize(size_t _dataSize) {}
     void sink();
-    void reset() {}
+    void reset() {
+        ready = false;
+    }
 
   private:
     char *buffer;
     size_t bufferSize;
+    bool ready;
     std::mutex mtx;
     std::condition_variable cv;
 
@@ -79,10 +82,13 @@ friend class ClassAlloc<WriteFuture>;
         dataSize = _dataSize;
     }
     void sink();
-    void reset() {}
+    void reset() {
+        ready = false;
+    }
 
   private:
     size_t dataSize;
+    bool ready;
     std::mutex mtx;
     std::condition_variable cv;
 
