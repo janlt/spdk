@@ -100,7 +100,7 @@ class FileMap {
   private:
     std::vector<FileEmu *> files;
     std::vector<FileEmu *> closedFiles;
-    static const uint32_t maxFiles = 1024;
+    static const uint32_t maxFiles = 256;
     uint8_t fileMap[maxFiles];
     uint32_t bottomFreeSlot;
     uint32_t topFreeSlot;
