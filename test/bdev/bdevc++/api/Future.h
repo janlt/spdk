@@ -28,7 +28,7 @@ friend class ClassAlloc<ReadFuture>;
     virtual ~ReadFuture();
 
   public:
-    int get(char *&data, size_t &_dataSize, unsigned long long _timeout = -1);
+    int get(char *&data, size_t &_dataSize, unsigned long long _timeout = 100000000000);
     void signal(StatusCode status, const char *data, size_t _dataSize);
     char *getData() {
         return buffer;
@@ -68,7 +68,7 @@ friend class ClassAlloc<WriteFuture>;
     virtual ~WriteFuture();
 
   public:
-    int get(char *&data, size_t &_dataSize, unsigned long long _timeout = -1);
+    int get(char *&data, size_t &_dataSize, unsigned long long _timeout = 100000000000);
     void signal(StatusCode status, const char *data, size_t _dataSize);
     char *getData() {
         return 0;
@@ -107,7 +107,7 @@ friend class ClassAlloc<ReadFuturePolling>;
     virtual ~ReadFuturePolling();
 
   public:
-    int get(char *&data, size_t &_dataSize, unsigned long long _timeout = -1);
+    int get(char *&data, size_t &_dataSize, unsigned long long _timeout = 100000000000);
     void signal(StatusCode status, const char *data, size_t _dataSize);
     char *getData() {
         return buffer;
@@ -145,7 +145,7 @@ friend class ClassAlloc<WriteFuturePolling>;
     virtual ~WriteFuturePolling();
 
   public:
-    int get(char *&data, size_t &_dataSize, unsigned long long _timeout = -1);
+    int get(char *&data, size_t &_dataSize, unsigned long long _timeout = 100000000000);
     void signal(StatusCode status, const char *data, size_t _dataSize);
     char *getData() {
         return 0;
