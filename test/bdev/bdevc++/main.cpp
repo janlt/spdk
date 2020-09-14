@@ -212,7 +212,8 @@ static int SyncWriteIoTest(BdevCpp::SyncApi *api,
         bool avg_lat,
         IoStats *st) {
     int rc = 0;
-    char *io_buf = new char[MAX_STACK_IO_SIZE];
+    char *io_buf_nal = new char[MAX_STACK_IO_SIZE];
+    char *io_buf = reinterpret_cast<char *>(reinterpret_cast<uint64_t>(io_buf_nal) & ~0xfff);
     char *io_cmp_buf = new char[MAX_STACK_IO_SIZE];
     if (!io_buf || !io_cmp_buf) {
         cerr << "Can't alloc buffer" << endl;
@@ -221,8 +222,8 @@ static int SyncWriteIoTest(BdevCpp::SyncApi *api,
 
     timespec start_t, end_t, diff_t;
 
-    int fd = !mode ? api->open(file_name, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR | O_SYNC | O_DIRECT) : 
-        ::open(file_name, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR | O_SYNC | O_DIRECT);
+    int fd = !mode ? api->open(file_name, O_RDWR | O_CREAT | O_DIRECT, S_IRUSR | S_IWUSR) :
+        ::open(file_name, O_RDWR | O_CREAT | O_DIRECT, S_IRUSR | S_IWUSR);
     if (fd < 0) {
         cerr << "open: " << file_name << " failed errno: " << errno << endl;
         return -1;
@@ -364,11 +365,11 @@ static int SyncWriteIoTest(BdevCpp::SyncApi *api,
     }
 
     if (io_buf && io_cmp_buf) {
-        delete [] io_buf;
+        delete [] io_buf_nal;
         delete [] io_cmp_buf;
     }
 
-    return rc;
+    return rc > 0 ? 0 : rc;
 }
 
 static int SyncPwriteIoTest(BdevCpp::SyncApi *api,
@@ -382,15 +383,16 @@ static int SyncPwriteIoTest(BdevCpp::SyncApi *api,
         bool avg_lat,
         IoStats *st) {
     int rc = 0;
-    char *io_buf = new char[MAX_STACK_IO_SIZE];
+    char *io_buf_nal = new char[MAX_STACK_IO_SIZE];
+    char *io_buf = reinterpret_cast<char *>(reinterpret_cast<uint64_t>(io_buf_nal) & ~0xfff);
     char *io_cmp_buf = new char[MAX_STACK_IO_SIZE];
     if (!io_buf || !io_cmp_buf) {
         cerr << "Can't alloc buffer" << endl;
         return -1;
     }
 
-    int fd = !mode ? api->open(file_name, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR | O_SYNC | O_DIRECT) :
-        ::open(file_name, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR | O_SYNC | O_DIRECT);
+    int fd = !mode ? api->open(file_name, O_RDWR | O_CREAT | O_DIRECT, S_IRUSR | S_IWUSR) :
+        ::open(file_name, O_RDWR | O_CREAT | O_DIRECT, S_IRUSR | S_IWUSR);
     if (fd < 0) {
         cerr << "open: " << file_name << " failed errno: " << errno << endl;
         return -1;
@@ -507,7 +509,7 @@ static int SyncPwriteIoTest(BdevCpp::SyncApi *api,
     }
 
     if (io_buf && io_cmp_buf) {
-        delete [] io_buf;
+        delete [] io_buf_nal;
         delete [] io_cmp_buf;
     }
 
@@ -522,7 +524,7 @@ static int SyncPwriteIoTest(BdevCpp::SyncApi *api,
             cerr << "Unlink file: " << file_name << " failed" << endl;
     }
 
-    return rc;
+    return rc > 0 ? 0 : rc;
 }
 
 static int SyncReadIoTest(BdevCpp::SyncApi *api,
@@ -535,14 +537,15 @@ static int SyncReadIoTest(BdevCpp::SyncApi *api,
         bool avg_lat,
         IoStats *st) {
     int rc = 0;
-    char *io_buf = new char[MAX_STACK_IO_SIZE];
+    char *io_buf_nal = new char[MAX_STACK_IO_SIZE];
+    char *io_buf = reinterpret_cast<char *>(reinterpret_cast<uint64_t>(io_buf_nal) & ~0xfff);
     if (!io_buf) {
         cerr << "Can't alloc buffer" << endl;
         return -1;
     }
 
-    int fd = !mode ? api->open(file_name, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR | O_SYNC | O_DIRECT) :
-        ::open(file_name, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR | O_SYNC | O_DIRECT);
+    int fd = !mode ? api->open(file_name, O_RDWR | O_CREAT | O_DIRECT, S_IRUSR | S_IWUSR) :
+        ::open(file_name, O_RDWR | O_CREAT | O_DIRECT, S_IRUSR | S_IWUSR);
     if (fd < 0) {
         cerr << "open: " << file_name << " failed errno: " << errno << endl;
         return -1;
@@ -636,9 +639,9 @@ static int SyncReadIoTest(BdevCpp::SyncApi *api,
     }
 
     if (io_buf)
-        delete [] io_buf;
+        delete [] io_buf_nal;
 
-    return rc;
+    return rc > 0 ? 0 : rc;
 }
 
 static int SyncPreadIoTest(BdevCpp::SyncApi *api,
@@ -651,14 +654,15 @@ static int SyncPreadIoTest(BdevCpp::SyncApi *api,
         bool avg_lat,
         IoStats *st) {
     int rc = 0;
-    char *io_buf = new char[MAX_STACK_IO_SIZE];
+    char *io_buf_nal = new char[MAX_STACK_IO_SIZE];
+    char *io_buf = reinterpret_cast<char *>(reinterpret_cast<uint64_t>(io_buf_nal) & ~0xfff);
     if (!io_buf) {
         cerr << "Can't alloc buffer" << endl;
         return -1;
     }
 
-    int fd = !mode ? api->open(file_name, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR | O_SYNC | O_DIRECT) :
-        ::open(file_name, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR | O_SYNC | O_DIRECT);
+    int fd = !mode ? api->open(file_name, O_RDWR | O_CREAT | O_DIRECT, S_IRUSR | S_IWUSR) :
+        ::open(file_name, O_RDWR | O_CREAT | O_DIRECT, S_IRUSR | S_IWUSR);
     if (fd < 0) {
         cerr << "open: " << file_name << " failed errno: " << errno << endl;
         return -1;
@@ -746,7 +750,7 @@ static int SyncPreadIoTest(BdevCpp::SyncApi *api,
     }
 
     if (io_buf)
-        delete [] io_buf;
+        delete [] io_buf_nal;
 
     if (!mode)
         api->close(fd);
@@ -759,7 +763,7 @@ static int SyncPreadIoTest(BdevCpp::SyncApi *api,
             cerr << "Unlink file: " << file_name << " failed" << endl;
     }
 
-    return rc;
+    return rc > 0 ? 0 : rc;
 }
 
 //
@@ -866,7 +870,7 @@ static int AsyncWriteIoTest(BdevCpp::AsyncApi *api,
 
     int rc = 0;
 
-    int fd = api->open(file_name, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR | O_SYNC | O_DIRECT);
+    int fd = api->open(file_name, O_RDWR | O_CREAT | O_DIRECT, S_IRUSR | S_IWUSR);
     if (fd < 0) {
         cerr << "open: " << file_name << " failed errno: " << errno << endl;
         return -1;
@@ -1097,7 +1101,7 @@ static int AsyncSyncWriteIoTest(BdevCpp::AsyncApi *api,
 
     int rc = 0;
 
-    int fd = api->open(file_name, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR | O_SYNC | O_DIRECT);
+    int fd = api->open(file_name, O_RDWR | O_CREAT | O_DIRECT, S_IRUSR | S_IWUSR);
     if (fd < 0) {
         cerr << "open: " << file_name << " failed errno: " << errno << endl;
         return -1;
@@ -1373,7 +1377,7 @@ static int AsyncReadIoTest(BdevCpp::AsyncApi *api,
 
     int rc = 0;
 
-    int fd = api->open(file_name, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR | O_SYNC | O_DIRECT);
+    int fd = api->open(file_name, O_RDWR | O_CREAT | O_DIRECT, S_IRUSR | S_IWUSR);
     if (fd < 0) {
         cerr << "open: " << file_name << " failed errno: " << errno << endl;
         return -1;
@@ -1494,7 +1498,7 @@ static int AsyncSyncReadIoTest(BdevCpp::AsyncApi *api,
 
     int rc = 0;
 
-    int fd = api->open(file_name, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR | O_SYNC | O_DIRECT);
+    int fd = api->open(file_name, O_RDWR | O_CREAT | O_DIRECT, S_IRUSR | S_IWUSR);
     if (fd < 0) {
         cerr << "open: " << file_name << " failed errno: " << errno << endl;
         return -1;
