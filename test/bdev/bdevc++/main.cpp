@@ -1832,8 +1832,9 @@ static int mainGetopt(int argc, char *argv[],
 }
 
 struct ThreadArgs {
-    BdevCpp::AsyncApi *api;
+    BdevCpp::ApiBase *api;
     string file;
+    int mode;
     int fd;
     bool int_check;
     int l_cnt;
@@ -1850,43 +1851,51 @@ struct ThreadArgs {
     int rc;
 };
 
+
+static void SyncPwriteIoTestRunner(ThreadArgs *targs) {
+    int rc = SyncPwriteIoTest(dynamic_cast<BdevCpp::SyncApi *>(targs->api), targs->file.c_str(),
+        targs->mode, targs->int_check, targs->l_cnt, targs->out_l_cnt,
+        targs->max_ios_m, targs->min_ios_m, targs->print_file_size, targs->stat_file, targs->unlink_file, targs->avg_lat, &targs->stats);
+    targs->rc = rc;
+}
+
 static void AsyncWriteIoTestRunner(ThreadArgs *targs) {
-    int rc = AsyncWriteIoTest(targs->api, targs->file.c_str(),
+    int rc = AsyncWriteIoTest(dynamic_cast<BdevCpp::AsyncApi *>(targs->api), targs->file.c_str(),
         targs->int_check, targs->l_cnt, targs->out_l_cnt, 
         targs->max_ios_m, targs->min_ios_m, targs->m_q, targs->print_file_size, targs->stat_file, targs->unlink_file, targs->poll_block_mode, targs->avg_lat, &targs->stats);
     targs->rc = rc;
 }
 
 static void AsyncWriteFdIoTestRunner(ThreadArgs *targs) {
-    int rc = AsyncWriteFdIoTest(targs->api, targs->fd,
+    int rc = AsyncWriteFdIoTest(dynamic_cast<BdevCpp::AsyncApi *>(targs->api), targs->fd,
         targs->l_cnt, targs->out_l_cnt, 
         targs->max_ios_m, targs->min_ios_m, targs->m_q, targs->poll_block_mode, targs->avg_lat, &targs->stats);
     targs->rc = rc;
 }
 
 static void AsyncSyncWriteIoTestRunner(ThreadArgs *targs) {
-    int rc = AsyncSyncWriteIoTest(targs->api, targs->file.c_str(),
+    int rc = AsyncSyncWriteIoTest(dynamic_cast<BdevCpp::AsyncApi *>(targs->api), targs->file.c_str(),
         targs->int_check, targs->l_cnt, targs->out_l_cnt,
         targs->max_ios_m, targs->min_ios_m, targs->m_q, targs->print_file_size, targs->stat_file, targs->unlink_file, targs->poll_block_mode, targs->avg_lat, &targs->stats);
     targs->rc = rc;
 }
 
 static void AsyncReadIoTestRunner(ThreadArgs *targs) {
-    int rc = AsyncReadIoTest(targs->api, targs->file.c_str(),
+    int rc = AsyncReadIoTest(dynamic_cast<BdevCpp::AsyncApi *>(targs->api), targs->file.c_str(),
         targs->int_check, targs->l_cnt, targs->out_l_cnt,
         targs->max_ios_m, targs->min_ios_m, targs->m_q, targs->print_file_size, targs->stat_file, targs->unlink_file, targs->poll_block_mode, targs->avg_lat, &targs->stats);
     targs->rc = rc;
 }
 
 static void AsyncReadFdIoTestRunner(ThreadArgs *targs) {
-    int rc = AsyncReadFdIoTest(targs->api, targs->fd,
+    int rc = AsyncReadFdIoTest(dynamic_cast<BdevCpp::AsyncApi *>(targs->api), targs->fd,
         targs->l_cnt, targs->out_l_cnt,
         targs->max_ios_m, targs->min_ios_m, targs->m_q, targs->poll_block_mode, targs->avg_lat, &targs->stats);
     targs->rc = rc;
 }
 
 static void AsyncSyncReadIoTestRunner(ThreadArgs *targs) {
-    int rc = AsyncSyncReadIoTest(targs->api, targs->file.c_str(),
+    int rc = AsyncSyncReadIoTest(dynamic_cast<BdevCpp::AsyncApi *>(targs->api), targs->file.c_str(),
         targs->int_check, targs->l_cnt, targs->out_l_cnt,
         targs->max_ios_m, targs->min_ios_m, targs->m_q, targs->print_file_size, targs->stat_file, targs->unlink_file, targs->poll_block_mode, targs->avg_lat, &targs->stats);
     targs->rc = rc;
@@ -2035,25 +2044,56 @@ int main(int argc, char **argv) {
         }
 
         if (psync_test == true) {
-            IoStats iostats;
-            memset(&iostats, '\0', sizeof(iostats));
-            rc = SyncPwriteIoTest(syncApi, sync_file.c_str(),
-                legacy_newstack_mode, integrity_check,
-                loop_count, out_loop_count,
-                max_iosize_mult,
-                min_iosize_mult,
-                print_file_size,
-                stat_file,
-                unlink_file,
-                avg_lat,
-                &iostats);
-            if (rc)
-                cerr << "SyncPwriteIoTest failed rc: " << rc << endl;
-            else
-                cout << "bytes_written: " << iostats.bytes_written << " bytes_read: " << iostats.bytes_read <<
-                    " write_ios: " << iostats.write_ios << " read_ios: " << iostats.read_ios <<
-                    " write MiB/sec: " << static_cast<float>(iostats.write_mbsec) << " read MiB/sec: " << static_cast<float>(iostats.read_mbsec) <<
-                    " write IOPS: " << static_cast<float>(iostats.write_iops) << " read IOPS: " << static_cast<float>(iostats.read_iops) << endl;
+            if (num_files == 1) {
+                IoStats iostats;
+                memset(&iostats, '\0', sizeof(iostats));
+                rc = SyncPwriteIoTest(syncApi, sync_file.c_str(),
+                    legacy_newstack_mode, integrity_check,
+                    loop_count, out_loop_count,
+                    max_iosize_mult,
+                    min_iosize_mult,
+                    print_file_size,
+                    stat_file,
+                    unlink_file,
+                    avg_lat,
+                    &iostats);
+                if (rc)
+                    cerr << "SyncPwriteIoTest failed rc: " << rc << endl;
+                else
+                    cout << "bytes_written: " << iostats.bytes_written << " bytes_read: " << iostats.bytes_read <<
+                        " write_ios: " << iostats.write_ios << " read_ios: " << iostats.read_ios <<
+                        " write MiB/sec: " << static_cast<float>(iostats.write_mbsec) << " read MiB/sec: " << static_cast<float>(iostats.read_mbsec) <<
+                        " write IOPS: " << static_cast<float>(iostats.write_iops) << " read IOPS: " << static_cast<float>(iostats.read_iops) << endl;
+            } else {
+                IoStats iostats;
+                memset(&iostats, '\0', sizeof(iostats));
+                thread *threads[64];
+                ThreadArgs *thread_args[64];
+                for (size_t i = 0 ; i < num_files ; i++) {
+                    string sync_f = sync_file + to_string(i);
+                    thread_args[i] = new ThreadArgs{syncApi, sync_f, legacy_newstack_mode, -1, integrity_check,
+                        loop_count, out_loop_count,
+                        max_iosize_mult, min_iosize_mult, max_queued, print_file_size, stat_file, unlink_file, poll_block_mode, avg_lat};
+                    threads[i] = new thread(&SyncPwriteIoTestRunner, thread_args[i]);
+                }
+
+                for (size_t i = 0 ; i < num_files ; i++) {
+                    threads[i]->join();
+                    iostats.write_mbsec += thread_args[i]->stats.write_mbsec;
+                    iostats.read_mbsec += thread_args[i]->stats.read_mbsec;
+                    iostats.write_iops += thread_args[i]->stats.write_iops;
+                    iostats.read_iops += thread_args[i]->stats.read_iops;
+                    iostats.bytes_written += thread_args[i]->stats.bytes_written;
+                    iostats.bytes_read += thread_args[i]->stats.bytes_read;
+                    iostats.write_ios += thread_args[i]->stats.write_ios;
+                    iostats.read_ios += thread_args[i]->stats.read_ios;
+                }
+                if (!rc)
+                    cout << "bytes_written: " << iostats.bytes_written << " bytes_read: " << iostats.bytes_read <<
+                        " write_ios: " << iostats.write_ios << " read_ios: " << iostats.read_ios <<
+                        " write MiB/sec: " << static_cast<float>(iostats.write_mbsec) << " read MiB/sec: " << static_cast<float>(iostats.read_mbsec) <<
+                        " write IOPS: " << static_cast<float>(iostats.write_iops) << " read IOPS: " << static_cast<float>(iostats.read_iops) << endl;
+            }
         }
 
         if (async_test == true) {
@@ -2078,7 +2118,7 @@ int main(int argc, char **argv) {
                 ThreadArgs *thread_args[64];
                 for (size_t i = 0 ; i < num_files ; i++) {
                     string async_f = async_file + to_string(i);
-                    thread_args[i] = new ThreadArgs{asyncApi, async_f, -1, integrity_check,
+                    thread_args[i] = new ThreadArgs{asyncApi, async_f, -1, -1, integrity_check,
                         loop_count, out_loop_count,
                         max_iosize_mult, min_iosize_mult, max_queued, print_file_size, stat_file, unlink_file, poll_block_mode, avg_lat};
                     threads[i] = new thread(&AsyncWriteIoTestRunner, thread_args[i]);
@@ -2125,7 +2165,7 @@ int main(int argc, char **argv) {
                 ThreadArgs *thread_args[64];
                 for (size_t i = 0 ; i < num_files ; i++) {
                     string async_f = async_file + to_string(i);
-                    thread_args[i] = new ThreadArgs{asyncApi, async_f, -1, integrity_check,
+                    thread_args[i] = new ThreadArgs{asyncApi, async_f, -1, -1, integrity_check,
                         loop_count, out_loop_count,
                         max_iosize_mult, min_iosize_mult, max_queued, print_file_size, stat_file, poll_block_mode, unlink_file, avg_lat};
                     threads[i] = new thread(&AsyncSyncWriteIoTestRunner, thread_args[i]);
@@ -2180,7 +2220,7 @@ int main(int argc, char **argv) {
                 ThreadArgs *thread_args[64];
                 for (size_t i = 0 ; i < num_files ; i++) {
                     string async_f = async_file + to_string(i);
-                    thread_args[i] = new ThreadArgs{asyncApi, async_f, fd, integrity_check,
+                    thread_args[i] = new ThreadArgs{asyncApi, async_f, -1, fd, integrity_check,
                         loop_count, out_loop_count,
                         max_iosize_mult, min_iosize_mult, max_queued, print_file_size, stat_file, poll_block_mode, unlink_file, avg_lat};
                     threads[i] = new thread(&AsyncWriteFdIoTestRunner, thread_args[i]);
@@ -2273,7 +2313,7 @@ int main(int argc, char **argv) {
                 ThreadArgs *thread_args[64];
                 for (size_t i = 0 ; i < num_files ; i++) {
                     string async_f = async_file + to_string(i);
-                    thread_args[i] = new ThreadArgs{asyncApi, async_f, -1, integrity_check,
+                    thread_args[i] = new ThreadArgs{asyncApi, async_f, -1, -1, integrity_check,
                         loop_count, out_loop_count,
                         max_iosize_mult, min_iosize_mult, max_queued, print_file_size, stat_file, unlink_file, poll_block_mode, avg_lat};
                     threads[i] = new thread(&AsyncReadIoTestRunner, thread_args[i]);
@@ -2320,7 +2360,7 @@ int main(int argc, char **argv) {
                 ThreadArgs *thread_args[64];
                 for (size_t i = 0 ; i < num_files ; i++) {
                     string async_f = async_file + to_string(i);
-                    thread_args[i] = new ThreadArgs{asyncApi, async_f, -1, integrity_check,
+                    thread_args[i] = new ThreadArgs{asyncApi, async_f, -1, -1, integrity_check,
                         loop_count, out_loop_count,
                         max_iosize_mult, min_iosize_mult, max_queued, print_file_size, stat_file, unlink_file, poll_block_mode, avg_lat};
                     threads[i] = new thread(&AsyncSyncReadIoTestRunner, thread_args[i]);
@@ -2374,7 +2414,7 @@ int main(int argc, char **argv) {
                 ThreadArgs *thread_args[64];
                 for (size_t i = 0 ; i < num_files ; i++) {
                     string async_f = async_file + to_string(i);
-                    thread_args[i] = new ThreadArgs{asyncApi, async_f, fd, integrity_check,
+                    thread_args[i] = new ThreadArgs{asyncApi, async_f, -1, fd, integrity_check,
                         loop_count, out_loop_count,
                         max_iosize_mult, min_iosize_mult, max_queued, print_file_size, stat_file, unlink_file, poll_block_mode, avg_lat};
                     threads[i] = new thread(&AsyncReadFdIoTestRunner, thread_args[i]);
