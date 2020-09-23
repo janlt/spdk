@@ -34,16 +34,16 @@ class AsyncApi : public ApiBase {
   public:
     int open(const char *name, int flags, mode_t mode = S_IRUSR | S_IWUSR);
     int close(int desc);
-    int read(int desc, char *buffer, size_t bufferSize);
-    int write(int desc, const char *data, size_t dataSize);
+    int read(int desc, char *buffer, size_t bufferSize, bool polling = true);
+    int write(int desc, const char *data, size_t dataSize, bool polling = true);
     off_t lseek(int fd, off_t offset, int whence);
     int fsync(int desc);
     int stat(const char *path, struct stat *buf);
     int unlink(const char *path);
     int rename(const char *oldpath, const char *newpath);
 
-    virtual int pread(int desc, char *buffer, size_t bufferSize, off_t offset);
-    virtual int pwrite(int desc, const char *data, size_t dataSize, off_t offset);
+    virtual int pread(int desc, char *buffer, size_t bufferSize, off_t offset, bool polling = true);
+    virtual int pwrite(int desc, const char *data, size_t dataSize, off_t offset, bool polling = true);
 
     FutureBase *read(int desc, uint64_t pos, char *buffer, size_t bufferSize, bool polling = true);
     FutureBase *write(int desc, uint64_t pos, const char *data, size_t dataSize, bool polling = true);
