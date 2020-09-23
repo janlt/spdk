@@ -1,6 +1,9 @@
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
+#include <libaio.h>
+#include <fcntl.h>
 #include <string.h>
 #include <getopt.h>
 #include <time.h>
@@ -372,6 +375,9 @@ static int SyncWriteIoTest(BdevCpp::SyncApi *api,
     return rc > 0 ? 0 : rc;
 }
 
+//
+// Sync IO tests
+//
 static int SyncPwriteIoTest(BdevCpp::SyncApi *api,
         const char *file_name, int mode, int check,
         int loop_count, int out_loop_count,
@@ -767,7 +773,7 @@ static int SyncPreadIoTest(BdevCpp::SyncApi *api,
 }
 
 //
-// Async IO test
+// Async IO tests
 //
 const size_t maxWriteFutures = 2048;
 const size_t maxReadFutures = 2048;
@@ -1618,6 +1624,319 @@ static int AsyncSyncReadIoTest(BdevCpp::AsyncApi *api,
     return rc;
 }
 
+const size_t maxWriteAios = 2048;
+const size_t maxReadAios = 2048;
+
+static int AsyncAioIoCompleteWrites(io_context_t *ctx,
+        size_t &write_ios,
+        size_t &bytes_written,
+        size_t &num_write_aios,
+        struct iocb *write_aios[],
+        struct timespec *timeout,
+        bool avg_lat) {
+    int rc = 0;
+    struct io_event events[maxWriteAios];
+
+    size_t curr_aios = 0;
+    for ( ;; ) {
+        if (curr_aios >= num_write_aios)
+            break;
+
+        int w_rc = io_getevents(*ctx, 1, num_write_aios, events, timeout);
+        if (w_rc < 0) {
+            cerr << "io_getevents failed errno: " << errno << endl;
+            rc = -1;
+            break;
+        }
+
+        for (size_t i = curr_aios ; i < curr_aios + w_rc ; i++) {
+            write_ios++;
+            bytes_written += write_aios[i]->u.c.nbytes;
+        }
+
+        curr_aios += w_rc;
+    }
+    num_write_aios = 0;
+
+    return rc;
+}
+
+static int AsyncAioIoCompleteReads(io_context_t *ctx,
+        size_t &read_ios,
+        size_t &bytes_read,
+        size_t &num_read_aios,
+        struct iocb *read_aios[],
+        char *io_buffers[],
+        char *io_cmp_buffers[],
+        size_t io_sizes[],
+        struct timespec *timeout,
+        bool avg_lat) {
+    int rc = 0;
+    struct io_event events[maxWriteAios];
+
+    size_t curr_aios = 0;
+    for ( ;; ) {
+        if (curr_aios >= num_read_aios)
+            break;
+
+        int r_rc = io_getevents(*ctx, 1, num_read_aios, events, timeout);
+        if (r_rc < 0) {
+            cerr << "io_getevents failed errno: " << errno << endl;
+            rc = -1;
+            break;
+        }
+
+        for (size_t i = curr_aios ; i < curr_aios + r_rc ; i++) {
+            read_ios++;
+            bytes_read += read_aios[i]->u.c.nbytes;
+
+            if (io_cmp_buffers && ::memcmp(io_buffers[i], io_cmp_buffers[i], io_sizes[i])) {
+                cerr << "Corrupted data after io_getevents at idx: " << i << " io_size: " << io_sizes[i] << endl;
+                rc = -1;
+                break;
+            }
+        }
+
+        curr_aios += r_rc;
+    }
+    num_read_aios = 0;
+
+    return rc;
+}
+
+static int AsyncAioWriteIoTest(const char *file_name, int check,
+        int loop_count, int out_loop_count,
+        size_t max_iosize_mult,
+        size_t min_iosize_mult,
+        size_t max_queued,
+        bool avg_lat,
+        IoStats *st) {
+    io_context_t ctx;
+    struct iocb *write_aios[maxWriteAios];
+    size_t num_write_aios = 0;
+    struct iocb *read_aios[maxReadAios];
+    size_t num_read_aios = 0;
+
+    char *io_buffers[maxWriteFutures];
+    char *io_cmp_buffers[maxReadFutures];
+    size_t io_sizes[maxReadFutures];
+    struct timespec tout = {1, 11111111};
+
+    int rc = 0;
+
+    int fd = ::open(file_name, O_RDWR | O_CREAT | O_DIRECT, S_IRUSR | S_IWUSR);
+    if (fd < 0) {
+        cerr << "open: " << file_name << " failed errno: " << errno << endl;
+        return -1;
+    }
+
+    max_queued = max_queued > maxWriteAios ? maxWriteAios : max_queued;
+
+    rc = io_setup(max_queued, &ctx);
+    if (rc < 0) {
+        cerr << "io_submit failed errno: " << errno << endl;
+        return rc;
+    }
+
+    for (size_t i = 0 ; i < max_queued ; i++) {
+        write_aios[i] = new struct iocb;
+        read_aios[i] = new struct iocb;
+    }
+
+    for (size_t i = 0 ; i < maxWriteAios ; i++)
+        io_buffers[i] = new char[MAX_STACK_IO_SIZE];
+    for (size_t i = 0 ; i < maxReadAios ; i++)
+        io_cmp_buffers[i] = new char[MAX_STACK_IO_SIZE];
+
+    time_t stime = printTimeNow("Start write (verify) Aio async test ");
+
+    uint64_t bytes_written = 0;
+    uint64_t bytes_read = 0;
+    uint64_t write_ios = 0;
+    uint64_t read_ios = 0;
+    uint64_t pos = 0;
+    uint64_t check_pos = pos;
+
+    for (int j = 0 ; j < out_loop_count ; j++) {
+        check_pos = pos;
+        for (int i = 0 ; i < loop_count ; i++) {
+            size_t io_size = calcIoSize(512, i, min_iosize_mult, max_iosize_mult);
+            if (check)
+                ::memset(io_buffers[num_write_aios], 'a' + i%20, io_size);
+
+            ::memset(write_aios[i], '\0', sizeof(struct iocb));
+            io_prep_pwrite(write_aios[i], fd, io_buffers[num_write_aios], io_size, pos);
+            rc = io_submit(ctx, 1, &write_aios[i]);
+            if (rc != 1) {
+                cerr << "io_submit failed errno: " << errno << endl;
+                break;
+            }
+            num_write_aios++;
+            pos += io_size;
+
+            if (num_write_aios >= max_queued || num_write_aios >= maxWriteAios) {
+                rc = AsyncAioIoCompleteWrites(&ctx, write_ios, bytes_written, num_write_aios, write_aios, &tout, avg_lat);
+                if (rc < 0)
+                    break;
+            }
+        }
+
+        rc = AsyncAioIoCompleteWrites(&ctx, write_ios, bytes_written, num_write_aios, write_aios, &tout, avg_lat);
+
+        if (!rc && check) {
+            for (int i = 0 ; i < loop_count ; i++) {
+                size_t io_size = calcIoSize(512, i, min_iosize_mult, max_iosize_mult);
+                ::memset(io_cmp_buffers[num_read_aios], 'a' + i%20, io_size);
+                io_sizes[num_read_aios] = io_size;
+
+                ::memset(read_aios[i], '\0', sizeof(struct iocb));
+                io_prep_pread(read_aios[i], fd, io_cmp_buffers[num_read_aios], io_size, check_pos);
+                rc = io_submit(ctx, 1, &read_aios[i]);
+                if (rc != 1) {
+                    cerr << "io_submit failed errno: " << errno << endl;
+                    break;
+                }
+                num_read_aios++;
+                check_pos += io_size;
+
+                if (num_read_aios > max_queued || num_read_aios >= maxReadAios) {
+                    rc = AsyncAioIoCompleteReads(&ctx, read_ios, bytes_read, num_read_aios, read_aios, io_buffers, io_cmp_buffers, io_sizes, &tout, avg_lat);
+                    if (rc < 0)
+                        break;
+                }
+            }
+
+            rc = AsyncAioIoCompleteReads(&ctx, read_ios, bytes_read, num_read_aios, read_aios, io_buffers, io_cmp_buffers, io_sizes, &tout, avg_lat);
+        }
+    }
+
+    time_t etime = printTimeNow("End Aio async test");
+    double t_diff = difftime(etime, stime);
+    if (!t_diff)
+        t_diff = 1;
+    st->write_mbsec = static_cast<double>(bytes_written)/t_diff;
+    st->write_mbsec /= (1024 * 1024);
+    st->read_mbsec = static_cast<double>(bytes_read)/t_diff;
+    st->read_mbsec /= (1024 * 1024);
+    st->write_iops = static_cast<double>(write_ios)/t_diff;
+    st->read_iops = static_cast<double>(read_ios)/t_diff;
+    st->bytes_written = bytes_written;
+    st->bytes_read = bytes_read;
+    st->write_ios = write_ios;
+    st->read_ios = read_ios;
+
+    io_destroy(ctx);
+
+    rc = ::close(fd);
+
+    for (size_t i = 0 ; i < maxWriteAios ; i++)
+        delete [] io_buffers[i];
+    for (size_t i = 0 ; i < maxReadAios ; i++)
+        delete [] io_cmp_buffers[i];
+
+    for (size_t i = 0 ; i < max_queued ; i++) {
+        delete write_aios[i];
+        delete read_aios[i];
+    }
+
+    return rc;
+}
+
+static int AsyncAioReadIoTest(const char *file_name, int check,
+        int loop_count, int out_loop_count,
+        size_t max_iosize_mult,
+        size_t min_iosize_mult,
+        size_t max_queued,
+        bool avg_lat,
+        IoStats *st) {
+    io_context_t ctx;
+    struct iocb *read_aios[maxReadAios];
+    size_t num_read_aios = 0;
+
+    char *io_buffers[maxWriteFutures];
+    size_t io_sizes[maxReadFutures];
+    struct timespec tout = {1, 11111111};
+
+    int rc = 0;
+
+    int fd = ::open(file_name, O_RDWR | O_CREAT | O_DIRECT, S_IRUSR | S_IWUSR);
+    if (fd < 0) {
+        cerr << "open: " << file_name << " failed errno: " << errno << endl;
+        return -1;
+    }
+
+    max_queued = max_queued > maxReadAios ? maxReadAios : max_queued;
+
+    rc = io_setup(max_queued, &ctx);
+    if (rc < 0) {
+        cerr << "io_submit failed errno: " << errno << endl;
+        return rc;
+    }
+
+    for (size_t i = 0 ; i < max_queued ; i++)
+        read_aios[i] = new struct iocb;
+
+    for (size_t i = 0 ; i < maxWriteAios ; i++)
+        io_buffers[i] = new char[MAX_STACK_IO_SIZE];
+
+    time_t stime = printTimeNow("Start read Aio async test ");
+
+    uint64_t bytes_read = 0;
+    uint64_t read_ios = 0;
+    uint64_t pos = 0;
+
+    for (int j = 0 ; j < out_loop_count ; j++) {
+        for (int i = 0 ; i < loop_count ; i++) {
+            size_t io_size = calcIoSize(512, i, min_iosize_mult, max_iosize_mult);
+
+            ::memset(read_aios[i], '\0', sizeof(struct iocb));
+            io_prep_pread(read_aios[i], fd, io_buffers[num_read_aios], io_size, pos);
+            rc = io_submit(ctx, 1, &read_aios[i]);
+            if (rc != 1) {
+                cerr << "io_submit failed errno: " << errno << endl;
+                break;
+            }
+            num_read_aios++;
+            pos += io_size;
+
+            if (num_read_aios >= max_queued || num_read_aios >= maxReadAios) {
+                rc = AsyncAioIoCompleteReads(&ctx, read_ios, bytes_read, num_read_aios, read_aios, io_buffers, 0, io_sizes, &tout, avg_lat);
+                if (rc < 0)
+                    break;
+            }
+        }
+
+        rc = AsyncAioIoCompleteReads(&ctx, read_ios, bytes_read, num_read_aios, read_aios, io_buffers, 0, io_sizes, &tout, avg_lat);
+    }
+
+    time_t etime = printTimeNow("End Aio async test");
+    double t_diff = difftime(etime, stime);
+    if (!t_diff)
+        t_diff = 1;
+    st->write_mbsec = 0;
+    st->write_mbsec = 0;
+    st->read_mbsec = static_cast<double>(bytes_read)/t_diff;
+    st->read_mbsec /= (1024 * 1024);
+    st->write_iops = 0;
+    st->read_iops = static_cast<double>(read_ios)/t_diff;
+    st->bytes_written = 0;
+    st->bytes_read = bytes_read;
+    st->write_ios = 0;
+    st->read_ios = read_ios;
+
+    io_destroy(ctx);
+
+    rc = ::close(fd);
+
+    for (size_t i = 0 ; i < maxWriteAios ; i++)
+        delete [] io_buffers[i];
+
+    for (size_t i = 0 ; i < max_queued ; i++)
+        delete read_aios[i];
+
+    return rc;
+}
+
 static void usage(const char *prog)
 {
     cout <<
@@ -1635,6 +1954,7 @@ static void usage(const char *prog)
         "  -i, --integrity-check          Run integrity check (false - default)\n"
         "  -b, --poll-block-mode          Poll (default 1) vs. block mode async API\n"
         "  -e, --print-avg-latency        Print average I/O latency\n"
+        "  -I, --aio-test                 Run AIO test\n"
         "  -O, --open-close-test          Run open/clsoe test\n"
         "  -S, --sync-test                Run IO sync (read/write) test\n"
         "  -P, --psync-test               Run IO psync (pwrite/pread) test\n"
@@ -1674,13 +1994,14 @@ static int mainGetopt(int argc, char *argv[],
         int &poll_block_mode,
         bool &avg_lat,
         eTestType &test_type,
+        bool &aio_test,
         bool &debug)
 {
     int c = 0;
     int ret = -1;
 
     while (1) {
-        static char short_options[] = "c:s:a:m:n:l:i:z:t:w:b:q:dehOSPAMNRWLZY";
+        static char short_options[] = "c:s:a:m:n:l:i:z:t:w:b:q:dehOSPAIMNRWLZY";
         static struct option long_options[] = {
             {"spdk-conf",               1, 0, 'c'},
             {"sync-file",               1, 0, 's'},
@@ -1698,6 +2019,7 @@ static int mainGetopt(int argc, char *argv[],
             {"open-close-test",         0, 0, 'O'},
             {"sync-test",               0, 0, 'S'},
             {"psync-test",              0, 0, 'P'},
+            {"aio-test",                0, 0, 'I'},
             {"async-test",              0, 0, 'A'},
             {"async-sync-test",         0, 0, 'M'},
             {"async-fd-test",           0, 0, 'N'},
@@ -1784,6 +2106,10 @@ static int mainGetopt(int argc, char *argv[],
 
         case 'A':
             async_test = true;
+            break;
+
+        case 'I':
+            aio_test = true;
             break;
 
         case 'M':
@@ -1880,6 +2206,13 @@ static void AsyncSyncWriteIoTestRunner(ThreadArgs *targs) {
     targs->rc = rc;
 }
 
+static void AsyncAioWriteIoTestRunner(ThreadArgs *targs) {
+    int rc = AsyncAioWriteIoTest(targs->file.c_str(),
+        targs->int_check, targs->l_cnt, targs->out_l_cnt,
+        targs->max_ios_m, targs->min_ios_m, targs->m_q, targs->avg_lat, &targs->stats);
+    targs->rc = rc;
+}
+
 static void AsyncReadIoTestRunner(ThreadArgs *targs) {
     int rc = AsyncReadIoTest(dynamic_cast<BdevCpp::AsyncApi *>(targs->api), targs->file.c_str(),
         targs->int_check, targs->l_cnt, targs->out_l_cnt,
@@ -1900,6 +2233,14 @@ static void AsyncSyncReadIoTestRunner(ThreadArgs *targs) {
         targs->max_ios_m, targs->min_ios_m, targs->m_q, targs->print_file_size, targs->stat_file, targs->unlink_file, targs->poll_block_mode, targs->avg_lat, &targs->stats);
     targs->rc = rc;
 }
+
+static void AsyncAioReadIoTestRunner(ThreadArgs *targs) {
+    int rc = AsyncAioReadIoTest(targs->file.c_str(),
+        targs->int_check, targs->l_cnt, targs->out_l_cnt,
+        targs->max_ios_m, targs->min_ios_m, targs->m_q, targs->avg_lat, &targs->stats);
+    targs->rc = rc;
+}
+
 
 int main(int argc, char **argv) {
     int rc = 0;
@@ -1929,6 +2270,7 @@ int main(int argc, char **argv) {
     bool async_test = false;
     bool async_sync_test = false;
     bool async_fd_test = false;
+    bool aio_test = false;
     int poll_block_mode = 1; // poll
     bool avg_lat = false;
     eTestType test_type = eWriteTest;
@@ -1957,6 +2299,7 @@ int main(int argc, char **argv) {
             poll_block_mode,
             avg_lat,
             test_type,
+            aio_test,
             debug);
     if (ret) {
         usage(argv[0]);
@@ -1971,6 +2314,8 @@ int main(int argc, char **argv) {
     if (async_test == true)
         test_type_cnt++;
     if (async_sync_test == true)
+        test_type_cnt++;
+    if (aio_test == true)
         test_type_cnt++;
     if (test_type_cnt > 1) {
         usage(argv[0]);
@@ -2140,6 +2485,57 @@ int main(int argc, char **argv) {
                         " write_ios: " << iostats.write_ios << " read_ios: " << iostats.read_ios <<
                         " write MiB/sec: " << static_cast<float>(iostats.write_mbsec) << " read MiB/sec: " << static_cast<float>(iostats.read_mbsec) <<
                         " write IOPS: " << static_cast<float>(iostats.write_iops) << " read IOPS: " << static_cast<float>(iostats.read_iops) << endl;
+            }
+
+            if (aio_test == true) {
+                if (num_files == 1) {
+                    IoStats iostats;
+                    memset(&iostats, '\0', sizeof(iostats));
+                    rc = AsyncAioWriteIoTest(async_file.c_str(),
+                        integrity_check,
+                        loop_count, out_loop_count,
+                        max_iosize_mult,
+                        min_iosize_mult,
+                        max_queued,
+                        avg_lat,
+                        &iostats);
+                    if (rc)
+                        cerr << "AsyncAioWriteIoTest failed rc: " << rc << endl;
+                    else
+                        cout << "bytes_written: " << iostats.bytes_written << " bytes_read: " << iostats.bytes_read <<
+                            " write_ios: " << iostats.write_ios << " read_ios: " << iostats.read_ios <<
+                            " write MiB/sec: " << static_cast<float>(iostats.write_mbsec) << " read MiB/sec: " << static_cast<float>(iostats.read_mbsec) <<
+                            " write IOPS: " << static_cast<float>(iostats.write_iops) << " read IOPS: " << static_cast<float>(iostats.read_iops) << endl;
+                } else {
+                    IoStats iostats;
+                    memset(&iostats, '\0', sizeof(iostats));
+                    thread *threads[64];
+                    ThreadArgs *thread_args[64];
+                    for (size_t i = 0 ; i < num_files ; i++) {
+                        string async_f = async_file + to_string(i);
+                        thread_args[i] = new ThreadArgs{0, async_f, -1, -1, integrity_check,
+                            loop_count, out_loop_count,
+                            max_iosize_mult, min_iosize_mult, max_queued, print_file_size, false, false, -1, avg_lat};
+                        threads[i] = new thread(&AsyncAioWriteIoTestRunner, thread_args[i]);
+                    }
+
+                    for (size_t i = 0 ; i < num_files ; i++) {
+                        threads[i]->join();
+                        iostats.write_mbsec += thread_args[i]->stats.write_mbsec;
+                        iostats.read_mbsec += thread_args[i]->stats.read_mbsec;
+                        iostats.write_iops += thread_args[i]->stats.write_iops;
+                        iostats.read_iops += thread_args[i]->stats.read_iops;
+                        iostats.bytes_written += thread_args[i]->stats.bytes_written;
+                        iostats.bytes_read += thread_args[i]->stats.bytes_read;
+                        iostats.write_ios += thread_args[i]->stats.write_ios;
+                        iostats.read_ios += thread_args[i]->stats.read_ios;
+                    }
+                    if (!rc)
+                        cout << "bytes_written: " << iostats.bytes_written << " bytes_read: " << iostats.bytes_read <<
+                            " write_ios: " << iostats.write_ios << " read_ios: " << iostats.read_ios <<
+                            " write MiB/sec: " << static_cast<float>(iostats.write_mbsec) << " read MiB/sec: " << static_cast<float>(iostats.read_mbsec) <<
+                            " write IOPS: " << static_cast<float>(iostats.write_iops) << " read IOPS: " << static_cast<float>(iostats.read_iops) << endl;
+                }
             }
         }
 
@@ -2364,6 +2760,57 @@ int main(int argc, char **argv) {
                         loop_count, out_loop_count,
                         max_iosize_mult, min_iosize_mult, max_queued, print_file_size, stat_file, unlink_file, poll_block_mode, avg_lat};
                     threads[i] = new thread(&AsyncSyncReadIoTestRunner, thread_args[i]);
+                }
+
+                for (size_t i = 0 ; i < num_files ; i++) {
+                    threads[i]->join();
+                    iostats.write_mbsec += thread_args[i]->stats.write_mbsec;
+                    iostats.read_mbsec += thread_args[i]->stats.read_mbsec;
+                    iostats.write_iops += thread_args[i]->stats.write_iops;
+                    iostats.read_iops += thread_args[i]->stats.read_iops;
+                    iostats.bytes_written += thread_args[i]->stats.bytes_written;
+                    iostats.bytes_read += thread_args[i]->stats.bytes_read;
+                    iostats.write_ios += thread_args[i]->stats.write_ios;
+                    iostats.read_ios += thread_args[i]->stats.read_ios;
+                }
+                if (!rc)
+                    cout << "bytes_written: " << iostats.bytes_written << " bytes_read: " << iostats.bytes_read <<
+                        " write_ios: " << iostats.write_ios << " read_ios: " << iostats.read_ios <<
+                        " write MiB/sec: " << static_cast<float>(iostats.write_mbsec) << " read MiB/sec: " << static_cast<float>(iostats.read_mbsec) <<
+                        " write IOPS: " << static_cast<float>(iostats.write_iops) << " read IOPS: " << static_cast<float>(iostats.read_iops) << endl;
+            }
+        }
+
+        if (aio_test == true) {
+            if (num_files == 1) {
+                IoStats iostats;
+                memset(&iostats, '\0', sizeof(iostats));
+                rc = AsyncAioReadIoTest(async_file.c_str(),
+                    integrity_check,
+                    loop_count, out_loop_count,
+                    max_iosize_mult,
+                    min_iosize_mult,
+                    max_queued,
+                    avg_lat,
+                    &iostats);
+                if (rc)
+                    cerr << "AsyncAioReadIoTest failed rc: " << rc << endl;
+                else
+                    cout << "bytes_written: " << iostats.bytes_written << " bytes_read: " << iostats.bytes_read <<
+                        " write_ios: " << iostats.write_ios << " read_ios: " << iostats.read_ios <<
+                        " write MiB/sec: " << static_cast<float>(iostats.write_mbsec) << " read MiB/sec: " << static_cast<float>(iostats.read_mbsec) <<
+                        " write IOPS: " << static_cast<float>(iostats.write_iops) << " read IOPS: " << static_cast<float>(iostats.read_iops) << endl;
+            } else {
+                IoStats iostats;
+                memset(&iostats, '\0', sizeof(iostats));
+                thread *threads[64];
+                ThreadArgs *thread_args[64];
+                for (size_t i = 0 ; i < num_files ; i++) {
+                    string async_f = async_file + to_string(i);
+                    thread_args[i] = new ThreadArgs{0, async_f, -1, -1, integrity_check,
+                        loop_count, out_loop_count,
+                        max_iosize_mult, min_iosize_mult, max_queued, print_file_size, false, false, -1, avg_lat};
+                    threads[i] = new thread(&AsyncAioReadIoTestRunner, thread_args[i]);
                 }
 
                 for (size_t i = 0 ; i < num_files ; i++) {
