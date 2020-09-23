@@ -49,6 +49,90 @@
 
 namespace BdevCpp {
 
+//#define AVG_IO_LAT
+
+#ifdef AVG_IO_LAT
+static int dt_read_count = 1;
+static int dt_write_count = 1;
+
+static timespec io_diff_read_t;
+static timespec io_diff_write_t;
+
+static timespec io_avg_read_t;
+static timespec io_avg_write_t;
+
+timespec start_t, end_t, diff_t;
+
+
+#define IO_LAT_AVG_INCR 256
+#define IO_LAT_AVG_INTERVAL (1 << 16)
+
+#define JANS_CLOCK_MODE CLOCK_MONOTONIC
+
+static timespec io_time_diff(timespec start, timespec end) {
+    timespec temp;
+    if ((end.tv_nsec-start.tv_nsec) < 0) {
+        temp.tv_sec = end.tv_sec-start.tv_sec - 1;
+        temp.tv_nsec = 1000000000 + end.tv_nsec - start.tv_nsec;
+    } else {
+        temp.tv_sec = end.tv_sec - start.tv_sec;
+        temp.tv_nsec = end.tv_nsec - start.tv_nsec;
+    }
+    return temp;
+}
+
+inline void io_update_read_avg(int dt_read_count) {
+    if (!(dt_read_count%IO_LAT_AVG_INCR)) {
+        io_avg_read_t.tv_nsec += (io_diff_read_t.tv_nsec/IO_LAT_AVG_INCR);
+        io_avg_read_t.tv_sec += (io_diff_read_t.tv_sec/IO_LAT_AVG_INCR);
+        io_diff_read_t.tv_sec = 0;
+        io_diff_read_t.tv_nsec = 0;
+    }
+}
+
+inline void io_update_write_avg(int dt_write_count) {
+    if (!(dt_write_count%IO_LAT_AVG_INCR)) {
+        io_avg_write_t.tv_nsec += (io_diff_write_t.tv_nsec/IO_LAT_AVG_INCR);
+        io_avg_write_t.tv_sec += (io_diff_write_t.tv_sec/IO_LAT_AVG_INCR);
+        io_diff_write_t.tv_sec = 0;
+        io_diff_write_t.tv_nsec = 0;
+    }
+}
+
+inline void io_get_read_avg(int &dt_read_count) {
+    if (!((dt_read_count++)%IO_LAT_AVG_INTERVAL)) {
+        timespec tmp_t;
+        int tmp_count = dt_read_count/IO_LAT_AVG_INCR;
+        tmp_t.tv_sec = io_avg_read_t.tv_sec/tmp_count;
+        tmp_t.tv_nsec = io_avg_read_t.tv_nsec/tmp_count;
+
+        cout << "spdk_io_read_lat.sec: " << tmp_t.tv_sec << " spdk_io_read_lat.nsec: " << tmp_t.tv_nsec << endl;
+        dt_read_count = 1;
+        io_diff_read_t.tv_sec = 0;
+        io_diff_read_t.tv_nsec = 0;
+        io_avg_read_t.tv_sec = 0;
+        io_avg_read_t.tv_nsec = 0;
+    }
+}
+
+inline void io_get_write_avg(int &dt_write_count) {
+    if (!((dt_write_count++)%IO_LAT_AVG_INTERVAL)) {
+        timespec tmp_t;
+        int tmp_count = dt_write_count/IO_LAT_AVG_INCR;
+        tmp_t.tv_sec = io_avg_write_t.tv_sec/tmp_count;
+        tmp_t.tv_nsec = io_avg_write_t.tv_nsec/tmp_count;
+
+        cout << "spdk_io_write_lat.sec: " << tmp_t.tv_sec << " spdk_io_write_lat.nsec: " << tmp_t.tv_nsec << endl;
+        dt_write_count = 1;
+        io_diff_write_t.tv_sec = 0;
+        io_diff_write_t.tv_nsec = 0;
+        io_avg_write_t.tv_sec = 0;
+        io_avg_write_t.tv_nsec = 0;
+    }
+
+}
+#endif
+
 //#define TEST_RAW_IOPS
 
 const char *poolLayout = "queue";
@@ -117,6 +201,17 @@ void SpdkBdev::IOAbort() { _IoState = SpdkBdev::IOState::BDEV_IO_ABORTED; }
  */
 void SpdkBdev::writeComplete(struct spdk_bdev_io *bdev_io, bool success,
                              void *cb_arg) {
+#ifdef AVG_IO_LAT
+    clock_gettime(JANS_CLOCK_MODE, &end_t);
+    diff_t = io_time_diff(start_t, end_t);
+
+    io_diff_write_t.tv_sec += diff_t.tv_sec;
+    io_diff_write_t.tv_nsec += diff_t.tv_nsec;
+
+    io_update_write_avg(dt_write_count);
+    io_get_write_avg(dt_write_count);
+#endif
+
     BdevTask *task = reinterpret_cast<DeviceTask *>(cb_arg);
     SpdkBdev *bdev = reinterpret_cast<SpdkBdev *>(task->bdev);
     bdev->ioPoolMgr->putIoWriteBuf(task->buff);
@@ -147,7 +242,9 @@ void SpdkBdev::writeComplete(struct spdk_bdev_io *bdev_io, bool success,
     if (task->rqst->inPlace == false)
         IoRqst::writePool.put(task->rqst);
 
-    //bdev->io2->enqueue(task);
+#ifdef _IO_FINALIZER_
+    bdev->io2->enqueue(task);
+#endif
 }
 
 /*
@@ -155,6 +252,17 @@ void SpdkBdev::writeComplete(struct spdk_bdev_io *bdev_io, bool success,
  */
 void SpdkBdev::readComplete(struct spdk_bdev_io *bdev_io, bool success,
                             void *cb_arg) {
+#ifdef AVG_IO_LAT
+    clock_gettime(JANS_CLOCK_MODE, &end_t);
+    diff_t = io_time_diff(start_t, end_t);
+
+    io_diff_read_t.tv_sec += diff_t.tv_sec;
+    io_diff_read_t.tv_nsec += diff_t.tv_nsec;
+
+    io_update_read_avg(dt_read_count);
+    io_get_read_avg(dt_read_count);
+#endif
+
     BdevTask *task = reinterpret_cast<DeviceTask *>(cb_arg);
     SpdkBdev *bdev = reinterpret_cast<SpdkBdev *>(task->bdev);
 
@@ -186,7 +294,9 @@ void SpdkBdev::readComplete(struct spdk_bdev_io *bdev_io, bool success,
     if (task->rqst->inPlace == false)
         IoRqst::readPool.put(task->rqst);
 
-    //bdev->io2->enqueue(task);
+#ifdef _IO_FINALIZER_
+    bdev->io2->enqueue(task);
+#endif
 }
 
 /*
@@ -278,6 +388,10 @@ bool SpdkBdev::doRead(DeviceTask *task) {
     //std::cout << "Read dataSize " << task->size <<
         //" blockSize " << task->blockSize << " lba " << task->lba << " nblks " << numBlks <<
         // " nvme: " << bdev->spBdevCtx.bdev_addr << std::endl;
+#ifdef AVG_IO_LAT
+    clock_gettime(JANS_CLOCK_MODE, &start_t);
+#endif
+
     int r_rc = spdk_bdev_read_blocks(
         bdev->spBdevCtx.bdev_desc, bdev->spBdevCtx.io_channel,
         task->buff->getSpdkDmaBuf(), task->lba,
@@ -345,6 +459,10 @@ bool SpdkBdev::doWrite(DeviceTask *task) {
     //std::cout << "Write dataSize " << task->size <<
         //" blockSize " << task->blockSize << " lba " << task->lba << " nblks " << numBlks <<
         // " nvme: " << bdev->spBdevCtx.bdev_addr << std::endl;
+#ifdef AVG_IO_LAT
+    clock_gettime(JANS_CLOCK_MODE, &start_t);
+#endif
+
     int w_rc = spdk_bdev_write_blocks(
         bdev->spBdevCtx.bdev_desc, bdev->spBdevCtx.io_channel,
         task->buff->getSpdkDmaBuf(), task->lba,
