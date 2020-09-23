@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <getopt.h>
+#include <time.h>
 
 #include <iostream>
 #include <memory>
@@ -45,6 +46,83 @@
 
 using namespace std;
 namespace po = boost::program_options;
+
+static timespec io_time_diff(timespec start, timespec end) {
+    timespec temp;
+    if ((end.tv_nsec-start.tv_nsec) < 0) {
+        temp.tv_sec = end.tv_sec-start.tv_sec - 1;
+        temp.tv_nsec = 1000000000 + end.tv_nsec - start.tv_nsec;
+    } else {
+        temp.tv_sec = end.tv_sec - start.tv_sec;
+        temp.tv_nsec = end.tv_nsec - start.tv_nsec;
+    }
+    return temp;
+}
+
+static int dt_read_count = 1;
+static int dt_write_count = 1;
+
+static timespec io_diff_read_t;
+static timespec io_diff_write_t;
+
+static timespec io_avg_read_t;
+static timespec io_avg_write_t;
+
+#define IO_LAT_AVG_INCR 256
+#define IO_LAT_AVG_INTERVAL (1 << 16)
+
+#define JANS_CLOCK_MODE CLOCK_MONOTONIC
+
+inline void io_update_read_avg(int dt_read_count) {
+    if (!(dt_read_count%IO_LAT_AVG_INCR)) {
+        io_avg_read_t.tv_nsec += (io_diff_read_t.tv_nsec/IO_LAT_AVG_INCR);
+        io_avg_read_t.tv_sec += (io_diff_read_t.tv_sec/IO_LAT_AVG_INCR);
+        io_diff_read_t.tv_sec = 0;
+        io_diff_read_t.tv_nsec = 0;
+    }
+}
+
+inline void io_update_write_avg(int dt_write_count) {
+    if (!(dt_write_count%IO_LAT_AVG_INCR)) {
+        io_avg_write_t.tv_nsec += (io_diff_write_t.tv_nsec/IO_LAT_AVG_INCR);
+        io_avg_write_t.tv_sec += (io_diff_write_t.tv_sec/IO_LAT_AVG_INCR);
+        io_diff_write_t.tv_sec = 0;
+        io_diff_write_t.tv_nsec = 0;
+    }
+}
+
+inline void io_get_read_avg(int &dt_read_count) {
+    if (!((dt_read_count++)%IO_LAT_AVG_INTERVAL)) {
+        timespec tmp_t;
+        int tmp_count = dt_read_count/IO_LAT_AVG_INCR;
+        tmp_t.tv_sec = io_avg_read_t.tv_sec/tmp_count;
+        tmp_t.tv_nsec = io_avg_read_t.tv_nsec/tmp_count;
+
+        cout << "io_read_lat.sec: " << tmp_t.tv_sec << " io_read_lat.nsec: " << tmp_t.tv_nsec << endl;
+        dt_read_count = 1;
+        io_diff_read_t.tv_sec = 0;
+        io_diff_read_t.tv_nsec = 0;
+        io_avg_read_t.tv_sec = 0;
+        io_avg_read_t.tv_nsec = 0;
+    }
+}
+
+inline void io_get_write_avg(int &dt_write_count) {
+    if (!((dt_write_count++)%IO_LAT_AVG_INTERVAL)) {
+        timespec tmp_t;
+        int tmp_count = dt_write_count/IO_LAT_AVG_INCR;
+        tmp_t.tv_sec = io_avg_write_t.tv_sec/tmp_count;
+        tmp_t.tv_nsec = io_avg_write_t.tv_nsec/tmp_count;
+
+        cout << "io_write_lat.sec: " << tmp_t.tv_sec << " io_write_lat.nsec: " << tmp_t.tv_nsec << endl;
+        dt_write_count = 1;
+        io_diff_write_t.tv_sec = 0;
+        io_diff_write_t.tv_nsec = 0;
+        io_avg_write_t.tv_sec = 0;
+        io_avg_write_t.tv_nsec = 0;
+    }
+
+}
 
 const char *spdk_conf = "config.spdk";
 
@@ -126,21 +204,26 @@ static off_t getAsyncFileSize(BdevCpp::AsyncApi *api, int fd) {
 static int SyncWriteIoTest(BdevCpp::SyncApi *api,
         const char *file_name, int mode, int check,
         int loop_count, int out_loop_count, 
-        size_t max_iosize_mult, size_t min_iosize_mult,
+        size_t max_iosize_mult,
+        size_t min_iosize_mult,
         bool print_file_size,
         bool stat_file,
         bool unlink_file,
+        bool avg_lat,
         IoStats *st) {
     int rc = 0;
-    char *io_buf = new char[MAX_STACK_IO_SIZE];
+    char *io_buf_nal = new char[MAX_STACK_IO_SIZE];
+    char *io_buf = reinterpret_cast<char *>(reinterpret_cast<uint64_t>(io_buf_nal) & ~0xfff);
     char *io_cmp_buf = new char[MAX_STACK_IO_SIZE];
     if (!io_buf || !io_cmp_buf) {
         cerr << "Can't alloc buffer" << endl;
         return -1;
     }
 
-    int fd = !mode ? api->open(file_name, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR | O_SYNC | O_DIRECT) : 
-        ::open(file_name, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR | O_SYNC | O_DIRECT);
+    timespec start_t, end_t, diff_t;
+
+    int fd = !mode ? api->open(file_name, O_RDWR | O_CREAT | O_DIRECT, S_IRUSR | S_IWUSR) :
+        ::open(file_name, O_RDWR | O_CREAT | O_DIRECT, S_IRUSR | S_IWUSR);
     if (fd < 0) {
         cerr << "open: " << file_name << " failed errno: " << errno << endl;
         return -1;
@@ -151,7 +234,7 @@ static int SyncWriteIoTest(BdevCpp::SyncApi *api,
 
     if (stat_file == true) {
         struct stat st;
-        rc = api->stat(file_name, &st);
+        rc = !mode ? api->stat(file_name, &st) : ::stat(file_name, &st);
         if (rc < 0)
             cerr << "Stat file: " << file_name << " failed" << endl;
         else
@@ -175,10 +258,25 @@ static int SyncWriteIoTest(BdevCpp::SyncApi *api,
             size_t io_size = calcIoSize(512, i, min_iosize_mult, max_iosize_mult);
             if (check)
                 ::memset(io_buf, 'a' + i%20, io_size);
+
+            if (avg_lat == true)
+                clock_gettime(JANS_CLOCK_MODE, &start_t);
+
             rc = !mode ? api->write(fd, io_buf, io_size) : ::write(fd, io_buf, io_size);
             if (rc < 0) {
                 cerr << "write sync failed rc: " << rc << " errno: " << errno << endl;
                 break;
+            }
+
+            if (avg_lat == true) {
+                clock_gettime(JANS_CLOCK_MODE, &end_t);
+                diff_t = io_time_diff(start_t, end_t);
+
+                io_diff_write_t.tv_sec += diff_t.tv_sec;
+                io_diff_write_t.tv_nsec += diff_t.tv_nsec;
+
+                io_update_write_avg(dt_write_count);
+                io_get_write_avg(dt_write_count);
             }
 
             rc = !mode ? api->fsync(fd) : ::fsync(fd);
@@ -249,7 +347,7 @@ static int SyncWriteIoTest(BdevCpp::SyncApi *api,
 
     if (stat_file == true) {
         struct stat st;
-        rc = api->stat(file_name, &st);
+        rc = !mode ? api->stat(file_name, &st) : ::stat(file_name, &st);
         if (rc < 0)
             cerr << "Stat file: " << file_name << " failed" << endl;
         else
@@ -267,41 +365,47 @@ static int SyncWriteIoTest(BdevCpp::SyncApi *api,
     }
 
     if (io_buf && io_cmp_buf) {
-        delete [] io_buf;
+        delete [] io_buf_nal;
         delete [] io_cmp_buf;
     }
 
-    return rc;
+    return rc > 0 ? 0 : rc;
 }
 
 static int SyncPwriteIoTest(BdevCpp::SyncApi *api,
-        const char *file_name, int check,
+        const char *file_name, int mode, int check,
         int loop_count, int out_loop_count,
-        size_t max_iosize_mult, size_t min_iosize_mult,
+        size_t max_iosize_mult,
+        size_t min_iosize_mult,
         bool print_file_size,
         bool stat_file,
         bool unlink_file,
+        bool avg_lat,
         IoStats *st) {
     int rc = 0;
-    char *io_buf = new char[MAX_STACK_IO_SIZE];
+    char *io_buf_nal = new char[MAX_STACK_IO_SIZE];
+    char *io_buf = reinterpret_cast<char *>(reinterpret_cast<uint64_t>(io_buf_nal) & ~0xfff);
     char *io_cmp_buf = new char[MAX_STACK_IO_SIZE];
     if (!io_buf || !io_cmp_buf) {
         cerr << "Can't alloc buffer" << endl;
         return -1;
     }
 
-    int fd = api->open(file_name, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR | O_SYNC | O_DIRECT);
+    int fd = !mode ? api->open(file_name, O_RDWR | O_CREAT | O_DIRECT, S_IRUSR | S_IWUSR) :
+        ::open(file_name, O_RDWR | O_CREAT | O_DIRECT, S_IRUSR | S_IWUSR);
     if (fd < 0) {
         cerr << "open: " << file_name << " failed errno: " << errno << endl;
         return -1;
     }
+
+    timespec start_t, end_t, diff_t;
 
     if (print_file_size == true)
         cout << "Sync file: " << file_name << " size: " << getSyncFileSize(api, fd) << endl;
 
     if (stat_file == true) {
         struct stat st;
-        rc = api->stat(file_name, &st);
+        rc = !mode ? api->stat(file_name, &st) : ::stat(file_name, &st);
         if (rc < 0)
             cerr << "Stat file: " << file_name << " failed" << endl;
         else
@@ -324,10 +428,25 @@ static int SyncPwriteIoTest(BdevCpp::SyncApi *api,
             size_t io_size = calcIoSize(512, i, min_iosize_mult, max_iosize_mult);
             if (check)
                 ::memset(io_buf, 'a' + i%20, io_size);
-            rc = api->pwrite(fd, io_buf, io_size, static_cast<off_t>(pos));
+
+            if (avg_lat == true)
+                clock_gettime(JANS_CLOCK_MODE, &start_t);
+
+            rc = !mode ? api->pwrite(fd, io_buf, io_size, static_cast<off_t>(pos)) : ::pwrite(fd, io_buf, io_size, static_cast<off_t>(pos));
             if (rc < 0) {
                 cerr << "pwrite sync failed rc: " << rc << " errno: " << errno << endl;
                 break;
+            }
+
+            if (avg_lat == true) {
+                clock_gettime(JANS_CLOCK_MODE, &end_t);
+                diff_t = io_time_diff(start_t, end_t);
+
+                io_diff_write_t.tv_sec += diff_t.tv_sec;
+                io_diff_write_t.tv_nsec += diff_t.tv_nsec;
+
+                io_update_write_avg(dt_write_count);
+                io_get_write_avg(dt_write_count);
             }
 
             pos += io_size;
@@ -340,7 +459,7 @@ static int SyncPwriteIoTest(BdevCpp::SyncApi *api,
                 size_t io_size = calcIoSize(512, i, min_iosize_mult, max_iosize_mult);
                 ::memset(io_cmp_buf, 'a' + i%20, io_size);
 
-                rc = api->pread(fd, io_buf, io_size, static_cast<off_t>(check_pos));
+                rc = !mode ? api->pread(fd, io_buf, io_size, static_cast<off_t>(check_pos)) : ::pread(fd, io_buf, io_size, static_cast<off_t>(check_pos));
                 if (rc < 0) {
                     cerr << "pread sync failed rc: " << rc << " errno: " << errno << endl;
                     rc = -1;
@@ -380,7 +499,7 @@ static int SyncPwriteIoTest(BdevCpp::SyncApi *api,
 
     if (stat_file == true) {
         struct stat st;
-        rc = api->stat(file_name, &st);
+        rc = !mode ? api->stat(file_name, &st) : ::stat(file_name, &st);
         if (rc < 0)
             cerr << "Stat file: " << file_name << " failed" << endl;
         else
@@ -390,19 +509,22 @@ static int SyncPwriteIoTest(BdevCpp::SyncApi *api,
     }
 
     if (io_buf && io_cmp_buf) {
-        delete [] io_buf;
+        delete [] io_buf_nal;
         delete [] io_cmp_buf;
     }
 
-    api->close(fd);
+    if (!mode)
+        api->close(fd);
+    else
+        ::close(fd);
 
     if (unlink_file == true) {
-        rc = api->unlink(file_name);
+        rc = !mode ? api->unlink(file_name) : ::unlink(file_name);
         if (rc < 0)
             cerr << "Unlink file: " << file_name << " failed" << endl;
     }
 
-    return rc;
+    return rc > 0 ? 0 : rc;
 }
 
 static int SyncReadIoTest(BdevCpp::SyncApi *api,
@@ -412,27 +534,31 @@ static int SyncReadIoTest(BdevCpp::SyncApi *api,
         bool print_file_size,
         bool stat_file,
         bool unlink_file,
+        bool avg_lat,
         IoStats *st) {
     int rc = 0;
-    char *io_buf = new char[MAX_STACK_IO_SIZE];
+    char *io_buf_nal = new char[MAX_STACK_IO_SIZE];
+    char *io_buf = reinterpret_cast<char *>(reinterpret_cast<uint64_t>(io_buf_nal) & ~0xfff);
     if (!io_buf) {
         cerr << "Can't alloc buffer" << endl;
         return -1;
     }
 
-    int fd = !mode ? api->open(file_name, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR | O_SYNC | O_DIRECT) :
-        ::open(file_name, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR | O_SYNC | O_DIRECT);
+    int fd = !mode ? api->open(file_name, O_RDWR | O_CREAT | O_DIRECT, S_IRUSR | S_IWUSR) :
+        ::open(file_name, O_RDWR | O_CREAT | O_DIRECT, S_IRUSR | S_IWUSR);
     if (fd < 0) {
         cerr << "open: " << file_name << " failed errno: " << errno << endl;
         return -1;
     }
+
+    timespec start_t, end_t, diff_t;
 
     if (print_file_size == true)
         cout << "Sync file: " << file_name << " size: " << getSyncFileSize(api, fd) << endl;
 
     if (stat_file == true) {
         struct stat st;
-        rc = api->stat(file_name, &st);
+        rc = !mode ? api->stat(file_name, &st) : ::stat(file_name, &st);
         if (rc < 0)
             cerr << "Stat file: " << file_name << " failed" << endl;
         else
@@ -449,10 +575,25 @@ static int SyncReadIoTest(BdevCpp::SyncApi *api,
     for (int j = 0 ; j < out_loop_count ; j++) {
         for (int i = 0 ; i < loop_count ; i++) {
             size_t io_size = calcIoSize(512, i, min_iosize_mult, max_iosize_mult);
+
+            if (avg_lat == true)
+                clock_gettime(JANS_CLOCK_MODE, &start_t);
+
             rc = !mode ? api->read(fd, io_buf, io_size) : ::read(fd, io_buf, io_size);
             if (rc < 0) {
                 cerr << "read sync failed rc: " << rc << " errno: " << errno << endl;
                 break;
+            }
+
+            if (avg_lat == true) {
+                clock_gettime(JANS_CLOCK_MODE, &end_t);
+                diff_t = io_time_diff(start_t, end_t);
+
+                io_diff_read_t.tv_sec += diff_t.tv_sec;
+                io_diff_read_t.tv_nsec += diff_t.tv_nsec;
+
+                io_update_read_avg(dt_read_count);
+                io_get_read_avg(dt_read_count);
             }
 
             read_ios++;
@@ -480,7 +621,7 @@ static int SyncReadIoTest(BdevCpp::SyncApi *api,
 
     if (stat_file == true) {
         struct stat st;
-        rc = api->stat(file_name, &st);
+        rc = !mode ? api->stat(file_name, &st) : ::stat(file_name, &st);
         if (rc < 0)
             cerr << "Stat file: " << file_name << " failed" << endl;
         else
@@ -492,44 +633,49 @@ static int SyncReadIoTest(BdevCpp::SyncApi *api,
     rc = !mode ? api->close(fd) : ::close(fd);
 
     if (unlink_file == true) {
-        rc = api->unlink(file_name);
+        rc = !mode ? api->unlink(file_name) : ::unlink(file_name);
         if (rc < 0)
             cerr << "Unlink file: " << file_name << " failed" << endl;
     }
 
     if (io_buf)
-        delete [] io_buf;
+        delete [] io_buf_nal;
 
-    return rc;
+    return rc > 0 ? 0 : rc;
 }
 
 static int SyncPreadIoTest(BdevCpp::SyncApi *api,
-        const char *file_name, int check,
+        const char *file_name, int mode, int check,
         int loop_count, int out_loop_count,
         size_t max_iosize_mult, size_t min_iosize_mult,
         bool print_file_size,
         bool stat_file,
         bool unlink_file,
+        bool avg_lat,
         IoStats *st) {
     int rc = 0;
-    char *io_buf = new char[MAX_STACK_IO_SIZE];
+    char *io_buf_nal = new char[MAX_STACK_IO_SIZE];
+    char *io_buf = reinterpret_cast<char *>(reinterpret_cast<uint64_t>(io_buf_nal) & ~0xfff);
     if (!io_buf) {
         cerr << "Can't alloc buffer" << endl;
         return -1;
     }
 
-    int fd = api->open(file_name, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR | O_SYNC | O_DIRECT);
+    int fd = !mode ? api->open(file_name, O_RDWR | O_CREAT | O_DIRECT, S_IRUSR | S_IWUSR) :
+        ::open(file_name, O_RDWR | O_CREAT | O_DIRECT, S_IRUSR | S_IWUSR);
     if (fd < 0) {
         cerr << "open: " << file_name << " failed errno: " << errno << endl;
         return -1;
     }
+
+    timespec start_t, end_t, diff_t;
 
     if (print_file_size == true)
         cout << "Sync file: " << file_name << " size: " << getSyncFileSize(api, fd) << endl;
 
     if (stat_file == true) {
         struct stat st;
-        rc = api->stat(file_name, &st);
+        rc = !mode ? api->stat(file_name, &st) : ::stat(file_name, &st);
         if (rc < 0)
             cerr << "Stat file: " << file_name << " failed" << endl;
         else
@@ -547,10 +693,25 @@ static int SyncPreadIoTest(BdevCpp::SyncApi *api,
     for (int j = 0 ; j < out_loop_count ; j++) {
         for (int i = 0 ; i < loop_count ; i++) {
             size_t io_size = calcIoSize(512, i, min_iosize_mult, max_iosize_mult);
-            rc = api->pread(fd, io_buf, io_size, static_cast<off_t>(pos));
+
+            if (avg_lat == true)
+                clock_gettime(JANS_CLOCK_MODE, &start_t);
+
+            rc = !mode ? api->pread(fd, io_buf, io_size, static_cast<off_t>(pos)) : ::pread(fd, io_buf, io_size, static_cast<off_t>(pos));
             if (rc < 0) {
                 cerr << "pread sync failed rc: " << rc << " errno: " << errno << endl;
                 break;
+            }
+
+            if (avg_lat == true) {
+                clock_gettime(JANS_CLOCK_MODE, &end_t);
+                diff_t = io_time_diff(start_t, end_t);
+
+                io_diff_read_t.tv_sec += diff_t.tv_sec;
+                io_diff_read_t.tv_nsec += diff_t.tv_nsec;
+
+                io_update_read_avg(dt_read_count);
+                io_get_read_avg(dt_read_count);
             }
 
             pos += io_size;
@@ -579,7 +740,7 @@ static int SyncPreadIoTest(BdevCpp::SyncApi *api,
 
     if (stat_file == true) {
         struct stat st;
-        rc = api->stat(file_name, &st);
+        rc = !mode ? api->stat(file_name, &st) : ::stat(file_name, &st);
         if (rc < 0)
             cerr << "Stat file: " << file_name << " failed" << endl;
         else
@@ -589,17 +750,20 @@ static int SyncPreadIoTest(BdevCpp::SyncApi *api,
     }
 
     if (io_buf)
-        delete [] io_buf;
+        delete [] io_buf_nal;
 
-    api->close(fd);
+    if (!mode)
+        api->close(fd);
+    else
+        ::close(fd);
 
     if (unlink_file == true) {
-        rc = api->unlink(file_name);
+        rc = !mode ? api->unlink(file_name) : ::unlink(file_name);
         if (rc < 0)
             cerr << "Unlink file: " << file_name << " failed" << endl;
     }
 
-    return rc;
+    return rc > 0 ? 0 : rc;
 }
 
 //
@@ -612,7 +776,9 @@ static int AsyncIoCompleteWrites(BdevCpp::AsyncApi *api,
         size_t &write_ios,
         size_t &bytes_written,
         size_t &num_write_futures,
-        BdevCpp::FutureBase *write_futures[]) {
+        BdevCpp::FutureBase *write_futures[],
+        int poll_block_mode,
+        bool avg_lat) {
     int rc = 0;
 
     size_t curr_idx = num_write_futures;
@@ -646,7 +812,9 @@ static int AsyncIoCompleteReads(BdevCpp::AsyncApi *api,
         BdevCpp::FutureBase *read_futures[],
         char *io_buffers[],
         char *io_cmp_buffers[],
-        size_t io_sizes[]) {
+        size_t io_sizes[],
+        int poll_block_mode,
+        bool avg_lat) {
     int rc = 0;
 
     size_t curr_idx = num_read_futures;
@@ -682,10 +850,14 @@ static int AsyncIoCompleteReads(BdevCpp::AsyncApi *api,
 static int AsyncWriteIoTest(BdevCpp::AsyncApi *api,
         const char *file_name, int check,
         int loop_count, int out_loop_count, 
-        size_t max_iosize_mult, size_t min_iosize_mult, size_t max_queued,
+        size_t max_iosize_mult,
+        size_t min_iosize_mult,
+        size_t max_queued,
         bool print_file_size,
         bool stat_file,
         bool unlink_file,
+        int poll_block_mode,
+        bool avg_lat,
         IoStats *st) {
     BdevCpp::FutureBase *write_futures[maxWriteFutures];
     size_t num_write_futures = 0;
@@ -698,7 +870,7 @@ static int AsyncWriteIoTest(BdevCpp::AsyncApi *api,
 
     int rc = 0;
 
-    int fd = api->open(file_name, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR | O_SYNC | O_DIRECT);
+    int fd = api->open(file_name, O_RDWR | O_CREAT | O_DIRECT, S_IRUSR | S_IWUSR);
     if (fd < 0) {
         cerr << "open: " << file_name << " failed errno: " << errno << endl;
         return -1;
@@ -732,6 +904,8 @@ static int AsyncWriteIoTest(BdevCpp::AsyncApi *api,
     uint64_t pos = 0; 
     uint64_t check_pos = pos;
 
+    bool poll_block = poll_block_mode ? true : false;
+
     for (int j = 0 ; j < out_loop_count ; j++) {
         check_pos = pos;
         for (int i = 0 ; i < loop_count ; i++) {
@@ -739,22 +913,22 @@ static int AsyncWriteIoTest(BdevCpp::AsyncApi *api,
             if (check)
                 ::memset(io_buffers[num_write_futures], 'a' + i%20, io_size);
 
-            write_futures[num_write_futures] = api->write(fd, pos, io_buffers[num_write_futures], io_size);
+            write_futures[num_write_futures] = api->write(fd, pos, io_buffers[num_write_futures], io_size, poll_block);
             num_write_futures++;
             pos += io_size;
 
             if (!write_futures[num_write_futures - 1]) {
-                rc = AsyncIoCompleteWrites(api, write_ios, bytes_written, num_write_futures, write_futures);
+                rc = AsyncIoCompleteWrites(api, write_ios, bytes_written, num_write_futures, write_futures, poll_block_mode, avg_lat);
                 if (rc < 0)
                     break;
                 continue;
             }
 
             if (num_write_futures >= max_queued || num_write_futures >= maxWriteFutures)
-                rc = AsyncIoCompleteWrites(api, write_ios, bytes_written, num_write_futures, write_futures);
+                rc = AsyncIoCompleteWrites(api, write_ios, bytes_written, num_write_futures, write_futures, poll_block_mode, avg_lat);
         }
 
-        rc = AsyncIoCompleteWrites(api, write_ios, bytes_written, num_write_futures, write_futures);
+        rc = AsyncIoCompleteWrites(api, write_ios, bytes_written, num_write_futures, write_futures, poll_block_mode, avg_lat);
 
         if (!rc && check) {
             for (int i = 0 ; i < loop_count ; i++) {
@@ -762,22 +936,22 @@ static int AsyncWriteIoTest(BdevCpp::AsyncApi *api,
                 ::memset(io_cmp_buffers[num_read_futures], 'a' + i%20, io_size);
                 io_sizes[num_read_futures] = io_size;
 
-                read_futures[num_read_futures] = api->read(fd, check_pos, io_buffers[num_read_futures], io_size);
+                read_futures[num_read_futures] = api->read(fd, check_pos, io_buffers[num_read_futures], io_size, poll_block);
                 num_read_futures++;
                 check_pos += io_size;
 
                 if (!read_futures[num_read_futures - 1]) {
-                    rc = AsyncIoCompleteReads(api, read_ios, bytes_read, num_read_futures, read_futures, io_buffers, io_cmp_buffers, io_sizes);
+                    rc = AsyncIoCompleteReads(api, read_ios, bytes_read, num_read_futures, read_futures, io_buffers, io_cmp_buffers, io_sizes, poll_block_mode, avg_lat);
                     if (rc < 0)
                         break;
                     continue;
                 }
 
                 if (num_read_futures > max_queued || num_read_futures >= maxReadFutures)
-                    rc = AsyncIoCompleteReads(api, read_ios, bytes_read, num_read_futures, read_futures, io_buffers, io_cmp_buffers, io_sizes);
+                    rc = AsyncIoCompleteReads(api, read_ios, bytes_read, num_read_futures, read_futures, io_buffers, io_cmp_buffers, io_sizes, poll_block_mode, avg_lat);
             }
 
-            rc = AsyncIoCompleteReads(api, read_ios, bytes_read, num_read_futures, read_futures, io_buffers, io_cmp_buffers, io_sizes);
+            rc = AsyncIoCompleteReads(api, read_ios, bytes_read, num_read_futures, read_futures, io_buffers, io_cmp_buffers, io_sizes, poll_block_mode, avg_lat);
         }
     }
 
@@ -831,7 +1005,11 @@ std::atomic<uint64_t> fd_pos;
 static int AsyncWriteFdIoTest(BdevCpp::AsyncApi *api,
         int fd,
         int loop_count, int out_loop_count, 
-        size_t max_iosize_mult, size_t min_iosize_mult, size_t max_queued,
+        size_t max_iosize_mult,
+        size_t min_iosize_mult,
+        size_t max_queued,
+        int poll_block_mode,
+        bool avg_lat,
         IoStats *st) {
     BdevCpp::FutureBase *write_futures[maxWriteFutures];
     size_t num_write_futures = 0;
@@ -850,25 +1028,27 @@ static int AsyncWriteFdIoTest(BdevCpp::AsyncApi *api,
     uint64_t write_ios = 0;
     uint64_t read_ios = 0;
 
+    bool poll_block = poll_block_mode ? true : false;
+
     for (int j = 0 ; j < out_loop_count ; j++) {
         for (int i = 0 ; i < loop_count ; i++) {
             size_t io_size = calcIoSize(512, i, min_iosize_mult, max_iosize_mult);
-            write_futures[num_write_futures] = api->write(fd, fd_pos, io_buffers[num_write_futures], io_size);
+            write_futures[num_write_futures] = api->write(fd, fd_pos, io_buffers[num_write_futures], io_size, poll_block);
             num_write_futures++;
             fd_pos += io_size;
 
             if (!write_futures[num_write_futures - 1]) {
-                rc = AsyncIoCompleteWrites(api, write_ios, bytes_written, num_write_futures, write_futures);
+                rc = AsyncIoCompleteWrites(api, write_ios, bytes_written, num_write_futures, write_futures, poll_block_mode, avg_lat);
                 if (rc < 0)
                     break;
                 continue;
             }
 
             if (num_write_futures >= max_queued || num_write_futures >= maxWriteFutures)
-                rc = AsyncIoCompleteWrites(api, write_ios, bytes_written, num_write_futures, write_futures);
+                rc = AsyncIoCompleteWrites(api, write_ios, bytes_written, num_write_futures, write_futures, poll_block_mode, avg_lat);
         }
 
-        rc = AsyncIoCompleteWrites(api, write_ios, bytes_written, num_write_futures, write_futures);
+        rc = AsyncIoCompleteWrites(api, write_ios, bytes_written, num_write_futures, write_futures, poll_block_mode, avg_lat);
     }
 
     time_t etime = printTimeNow("End async fd test");
@@ -895,10 +1075,14 @@ static int AsyncWriteFdIoTest(BdevCpp::AsyncApi *api,
 static int AsyncSyncWriteIoTest(BdevCpp::AsyncApi *api,
         const char *file_name, int check,
         int loop_count, int out_loop_count,
-        size_t max_iosize_mult, size_t min_iosize_mult, size_t max_queued,
+        size_t max_iosize_mult,
+        size_t min_iosize_mult,
+        size_t max_queued,
         bool print_file_size,
         bool stat_file,
         bool unlink_file,
+        int poll_block_mode,
+        bool avg_lat,
         IoStats *st) {
     BdevCpp::FutureBase *write_futures[maxWriteFutures];
     size_t num_write_futures = 0;
@@ -917,7 +1101,7 @@ static int AsyncSyncWriteIoTest(BdevCpp::AsyncApi *api,
 
     int rc = 0;
 
-    int fd = api->open(file_name, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR | O_SYNC | O_DIRECT);
+    int fd = api->open(file_name, O_RDWR | O_CREAT | O_DIRECT, S_IRUSR | S_IWUSR);
     if (fd < 0) {
         cerr << "open: " << file_name << " failed errno: " << errno << endl;
         return -1;
@@ -951,6 +1135,8 @@ static int AsyncSyncWriteIoTest(BdevCpp::AsyncApi *api,
     uint64_t pos = 0;
     uint64_t check_pos = pos;
 
+    bool poll_block = poll_block_mode ? true : false;
+
     bool failed = false;
     for (int j = 0 ; j < out_loop_count ; j++) {
         check_pos = pos;
@@ -963,7 +1149,7 @@ static int AsyncSyncWriteIoTest(BdevCpp::AsyncApi *api,
             }
 
             if (alternate) {
-                write_futures[num_write_futures] = api->write(fd, pos, io_buffers[num_write_futures], io_size);
+                write_futures[num_write_futures] = api->write(fd, pos, io_buffers[num_write_futures], io_size, poll_block);
                 num_write_futures++;
             } else {
                 int s_rc = api->pwrite(fd, io_buf, io_size, static_cast<off_t>(pos));
@@ -983,20 +1169,20 @@ static int AsyncSyncWriteIoTest(BdevCpp::AsyncApi *api,
             alternate = !alternate ? 1 : 0;
 
             if (!write_futures[num_write_futures - 1]) {
-                rc = AsyncIoCompleteWrites(api, write_ios, bytes_written, num_write_futures, write_futures);
+                rc = AsyncIoCompleteWrites(api, write_ios, bytes_written, num_write_futures, write_futures, poll_block_mode, avg_lat);
                 if (rc < 0)
                     break;
                 continue;
             }
 
             if (num_write_futures >= max_queued || num_write_futures >= maxWriteFutures)
-                rc = AsyncIoCompleteWrites(api, write_ios, bytes_written, num_write_futures, write_futures);
+                rc = AsyncIoCompleteWrites(api, write_ios, bytes_written, num_write_futures, write_futures, poll_block_mode, avg_lat);
         }
 
         if (failed == true)
             break;
 
-        rc = AsyncIoCompleteWrites(api, write_ios, bytes_written, num_write_futures, write_futures);
+        rc = AsyncIoCompleteWrites(api, write_ios, bytes_written, num_write_futures, write_futures, poll_block_mode, avg_lat);
 
         if (!rc && check) {
             int alternate = 0;
@@ -1007,7 +1193,7 @@ static int AsyncSyncWriteIoTest(BdevCpp::AsyncApi *api,
                 io_sizes[num_read_futures] = io_size;
 
                 if (alternate) {
-                    read_futures[num_read_futures] = api->read(fd, check_pos, io_buffers[num_read_futures], io_size);
+                    read_futures[num_read_futures] = api->read(fd, check_pos, io_buffers[num_read_futures], io_size, poll_block);
                     num_read_futures++;
                 } else {
                     int s_rc = api->pread(fd, io_buf, io_size, static_cast<off_t>(check_pos));
@@ -1034,17 +1220,17 @@ static int AsyncSyncWriteIoTest(BdevCpp::AsyncApi *api,
                 alternate = !alternate ? 1 : 0;
 
                 if (!read_futures[num_read_futures - 1]) {
-                    rc = AsyncIoCompleteReads(api, read_ios, bytes_read, num_read_futures, read_futures, io_buffers, io_cmp_buffers, io_sizes);
+                    rc = AsyncIoCompleteReads(api, read_ios, bytes_read, num_read_futures, read_futures, io_buffers, io_cmp_buffers, io_sizes, poll_block_mode, avg_lat);
                     if (rc < 0)
                         break;
                     continue;
                 }
 
                 if (num_read_futures > max_queued || num_read_futures >= maxReadFutures)
-                    rc = AsyncIoCompleteReads(api, read_ios, bytes_read, num_read_futures, read_futures, io_buffers, io_cmp_buffers, io_sizes);
+                    rc = AsyncIoCompleteReads(api, read_ios, bytes_read, num_read_futures, read_futures, io_buffers, io_cmp_buffers, io_sizes, poll_block_mode, avg_lat);
             }
 
-            rc = AsyncIoCompleteReads(api, read_ios, bytes_read, num_read_futures, read_futures, io_buffers, io_cmp_buffers, io_sizes);
+            rc = AsyncIoCompleteReads(api, read_ios, bytes_read, num_read_futures, read_futures, io_buffers, io_cmp_buffers, io_sizes, poll_block_mode, avg_lat);
         }
 
         if (failed == true)
@@ -1104,7 +1290,11 @@ static int AsyncSyncWriteIoTest(BdevCpp::AsyncApi *api,
 static int AsyncReadFdIoTest(BdevCpp::AsyncApi *api,
         int fd,
         int loop_count, int out_loop_count,
-        size_t max_iosize_mult, size_t min_iosize_mult, size_t max_queued,
+        size_t max_iosize_mult,
+        size_t min_iosize_mult,
+        size_t max_queued,
+        int poll_block_mode,
+        bool avg_lat,
         IoStats *st) {
     BdevCpp::FutureBase *read_futures[maxReadFutures];
     size_t num_read_futures = 0;
@@ -1122,26 +1312,28 @@ static int AsyncReadFdIoTest(BdevCpp::AsyncApi *api,
     uint64_t bytes_read = 0;
     uint64_t read_ios = 0;
 
+    bool poll_block = poll_block_mode ? true : false;
+
     for (int j = 0 ; j < out_loop_count ; j++) {
         for (int i = 0 ; i < loop_count ; i++) {
             size_t io_size = calcIoSize(512, i, min_iosize_mult, max_iosize_mult);
 
-            read_futures[num_read_futures] = api->read(fd, fd_pos, io_buffers[num_read_futures], io_size);
+            read_futures[num_read_futures] = api->read(fd, fd_pos, io_buffers[num_read_futures], io_size, poll_block);
             num_read_futures++;
             fd_pos += io_size;
 
             if (!read_futures[num_read_futures - 1]) {
-                rc = AsyncIoCompleteReads(api, read_ios, bytes_read, num_read_futures, read_futures, io_buffers, 0, io_sizes);
+                rc = AsyncIoCompleteReads(api, read_ios, bytes_read, num_read_futures, read_futures, io_buffers, 0, io_sizes, poll_block_mode, avg_lat);
                 if (rc < 0)
                     break;
                 continue;
             }
 
             if (num_read_futures >= max_queued || num_read_futures >= maxReadFutures)
-                rc = AsyncIoCompleteReads(api, read_ios, bytes_read, num_read_futures, read_futures, io_buffers, 0, io_sizes);
+                rc = AsyncIoCompleteReads(api, read_ios, bytes_read, num_read_futures, read_futures, io_buffers, 0, io_sizes, poll_block_mode, avg_lat);
         }
 
-        rc = AsyncIoCompleteReads(api, read_ios, bytes_read, num_read_futures, read_futures, io_buffers, 0, io_sizes);
+        rc = AsyncIoCompleteReads(api, read_ios, bytes_read, num_read_futures, read_futures, io_buffers, 0, io_sizes, poll_block_mode, avg_lat);
     }
 
     time_t etime = printTimeNow("End async fd test");
@@ -1168,10 +1360,14 @@ static int AsyncReadFdIoTest(BdevCpp::AsyncApi *api,
 static int AsyncReadIoTest(BdevCpp::AsyncApi *api,
         const char *file_name, int check,
         int loop_count, int out_loop_count,
-        size_t max_iosize_mult, size_t min_iosize_mult, size_t max_queued,
+        size_t max_iosize_mult,
+        size_t min_iosize_mult,
+        size_t max_queued,
         bool print_file_size,
         bool stat_file,
         bool unlink_file,
+        int poll_block_mode,
+        bool avg_lat,
         IoStats *st) {
     BdevCpp::FutureBase *read_futures[maxReadFutures];
     size_t num_read_futures = 0;
@@ -1181,7 +1377,7 @@ static int AsyncReadIoTest(BdevCpp::AsyncApi *api,
 
     int rc = 0;
 
-    int fd = api->open(file_name, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR | O_SYNC | O_DIRECT);
+    int fd = api->open(file_name, O_RDWR | O_CREAT | O_DIRECT, S_IRUSR | S_IWUSR);
     if (fd < 0) {
         cerr << "open: " << file_name << " failed errno: " << errno << endl;
         return -1;
@@ -1210,26 +1406,28 @@ static int AsyncReadIoTest(BdevCpp::AsyncApi *api,
     uint64_t read_ios = 0;
     uint64_t pos = 0;
 
+    bool poll_block = poll_block_mode ? true : false;
+
     for (int j = 0 ; j < out_loop_count ; j++) {
         for (int i = 0 ; i < loop_count ; i++) {
             size_t io_size = calcIoSize(512, i, min_iosize_mult, max_iosize_mult);
 
-            read_futures[num_read_futures] = api->read(fd, pos, io_buffers[num_read_futures], io_size);
+            read_futures[num_read_futures] = api->read(fd, pos, io_buffers[num_read_futures], io_size, poll_block);
             num_read_futures++;
             pos += io_size;
 
             if (!read_futures[num_read_futures - 1]) {
-                rc = AsyncIoCompleteReads(api, read_ios, bytes_read, num_read_futures, read_futures, io_buffers, 0, io_sizes);
+                rc = AsyncIoCompleteReads(api, read_ios, bytes_read, num_read_futures, read_futures, io_buffers, 0, io_sizes, poll_block_mode, avg_lat);
                 if (rc < 0)
                     break;
                 continue;
             }
 
             if (num_read_futures >= max_queued || num_read_futures >= maxReadFutures)
-                rc = AsyncIoCompleteReads(api, read_ios, bytes_read, num_read_futures, read_futures, io_buffers, 0, io_sizes);
+                rc = AsyncIoCompleteReads(api, read_ios, bytes_read, num_read_futures, read_futures, io_buffers, 0, io_sizes, poll_block_mode, avg_lat);
         }
 
-        rc = AsyncIoCompleteReads(api, read_ios, bytes_read, num_read_futures, read_futures, io_buffers, 0, io_sizes);
+        rc = AsyncIoCompleteReads(api, read_ios, bytes_read, num_read_futures, read_futures, io_buffers, 0, io_sizes, poll_block_mode, avg_lat);
     }
 
     time_t etime = printTimeNow("End async test");
@@ -1278,10 +1476,14 @@ static int AsyncReadIoTest(BdevCpp::AsyncApi *api,
 static int AsyncSyncReadIoTest(BdevCpp::AsyncApi *api,
         const char *file_name, int check,
         int loop_count, int out_loop_count,
-        size_t max_iosize_mult, size_t min_iosize_mult, size_t max_queued,
+        size_t max_iosize_mult,
+        size_t min_iosize_mult,
+        size_t max_queued,
         bool print_file_size,
         bool stat_file,
         bool unlink_file,
+        int poll_block_mode,
+        bool avg_lat,
         IoStats *st) {
     BdevCpp::FutureBase *read_futures[maxReadFutures];
     size_t num_read_futures = 0;
@@ -1296,7 +1498,7 @@ static int AsyncSyncReadIoTest(BdevCpp::AsyncApi *api,
 
     int rc = 0;
 
-    int fd = api->open(file_name, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR | O_SYNC | O_DIRECT);
+    int fd = api->open(file_name, O_RDWR | O_CREAT | O_DIRECT, S_IRUSR | S_IWUSR);
     if (fd < 0) {
         cerr << "open: " << file_name << " failed errno: " << errno << endl;
         return -1;
@@ -1325,6 +1527,8 @@ static int AsyncSyncReadIoTest(BdevCpp::AsyncApi *api,
     uint64_t read_ios = 0;
     uint64_t pos = 0;
 
+    bool poll_block = poll_block_mode ? true : false;
+
     bool failed = false;
     for (int j = 0 ; j < out_loop_count ; j++) {
         int alternate = 0;
@@ -1332,7 +1536,7 @@ static int AsyncSyncReadIoTest(BdevCpp::AsyncApi *api,
             size_t io_size = calcIoSize(512, i, min_iosize_mult, max_iosize_mult);
 
             if (alternate) {
-                read_futures[num_read_futures] = api->read(fd, pos, io_buffers[num_read_futures], io_size);
+                read_futures[num_read_futures] = api->read(fd, pos, io_buffers[num_read_futures], io_size, poll_block);
                 num_read_futures++;
             } else {
                 int s_rc = api->pread(fd, io_buf, io_size, static_cast<off_t>(pos));
@@ -1352,17 +1556,17 @@ static int AsyncSyncReadIoTest(BdevCpp::AsyncApi *api,
             alternate = !alternate ? 1 : 0;
 
             if (!read_futures[num_read_futures - 1]) {
-                rc = AsyncIoCompleteReads(api, read_ios, bytes_read, num_read_futures, read_futures, io_buffers, 0, io_sizes);
+                rc = AsyncIoCompleteReads(api, read_ios, bytes_read, num_read_futures, read_futures, io_buffers, 0, io_sizes, poll_block_mode, avg_lat);
                 if (rc < 0)
                     break;
                 continue;
             }
 
             if (num_read_futures >= max_queued || num_read_futures >= maxReadFutures)
-                rc = AsyncIoCompleteReads(api, read_ios, bytes_read, num_read_futures, read_futures, io_buffers, 0, io_sizes);
+                rc = AsyncIoCompleteReads(api, read_ios, bytes_read, num_read_futures, read_futures, io_buffers, 0, io_sizes, poll_block_mode, avg_lat);
         }
 
-        rc = AsyncIoCompleteReads(api, read_ios, bytes_read, num_read_futures, read_futures, io_buffers, 0, io_sizes);
+        rc = AsyncIoCompleteReads(api, read_ios, bytes_read, num_read_futures, read_futures, io_buffers, 0, io_sizes, poll_block_mode, avg_lat);
 
         if (failed == true)
             break;
@@ -1429,6 +1633,8 @@ static void usage(const char *prog)
         "  -t, --num-files                Number of files to write/read concurrently\n"
         "  -l, --legacy-newstack-mode     Use legacy (1) or new stack (0 - default) file IO routines\n"
         "  -i, --integrity-check          Run integrity check (false - default)\n"
+        "  -b, --poll-block-mode          Poll (default 1) vs. block mode async API\n"
+        "  -e, --print-avg-latency        Print average I/O latency\n"
         "  -O, --open-close-test          Run open/clsoe test\n"
         "  -S, --sync-test                Run IO sync (read/write) test\n"
         "  -P, --psync-test               Run IO psync (pwrite/pread) test\n"
@@ -1465,6 +1671,8 @@ static int mainGetopt(int argc, char *argv[],
         bool &print_file_size,
         bool &stat_file,
         bool &unlink_file,
+        int &poll_block_mode,
+        bool &avg_lat,
         eTestType &test_type,
         bool &debug)
 {
@@ -1472,7 +1680,7 @@ static int mainGetopt(int argc, char *argv[],
     int ret = -1;
 
     while (1) {
-        static char short_options[] = "c:s:a:m:n:l:i:z:t:w:q:dhOSPAMNRWLZY";
+        static char short_options[] = "c:s:a:m:n:l:i:z:t:w:b:q:dehOSPAMNRWLZY";
         static struct option long_options[] = {
             {"spdk-conf",               1, 0, 'c'},
             {"sync-file",               1, 0, 's'},
@@ -1481,6 +1689,8 @@ static int mainGetopt(int argc, char *argv[],
             {"outer-loop-count",        1, 0, 'n'},
             {"legacy-newstack-mode",    1, 0, 'l'},
             {"integrity-check",         1, 0, 'i'},
+            {"poll-block-mode",         1, 0, 'b'},
+            {"print-avg-latency",       1, 0, 'e'},
             {"max-queued",              1, 0, 'q'},
             {"max-iosize-mult",         1, 0, 'z'},
             {"min-iosize-mult",         1, 0, 'w'},
@@ -1546,6 +1756,14 @@ static int mainGetopt(int argc, char *argv[],
 
         case 'l':
             legacy_newstack_mode = atoi(optarg);
+            break;
+
+        case 'b':
+            poll_block_mode = atoi(optarg);
+            break;
+
+        case 'e':
+            avg_lat = true;
             break;
 
         case 'i':
@@ -1614,8 +1832,9 @@ static int mainGetopt(int argc, char *argv[],
 }
 
 struct ThreadArgs {
-    BdevCpp::AsyncApi *api;
+    BdevCpp::ApiBase *api;
     string file;
+    int mode;
     int fd;
     bool int_check;
     int l_cnt;
@@ -1626,49 +1845,59 @@ struct ThreadArgs {
     bool print_file_size;
     bool stat_file;
     bool unlink_file;
+    int poll_block_mode;
+    bool avg_lat;
     IoStats stats;
     int rc;
 };
 
+
+static void SyncPwriteIoTestRunner(ThreadArgs *targs) {
+    int rc = SyncPwriteIoTest(dynamic_cast<BdevCpp::SyncApi *>(targs->api), targs->file.c_str(),
+        targs->mode, targs->int_check, targs->l_cnt, targs->out_l_cnt,
+        targs->max_ios_m, targs->min_ios_m, targs->print_file_size, targs->stat_file, targs->unlink_file, targs->avg_lat, &targs->stats);
+    targs->rc = rc;
+}
+
 static void AsyncWriteIoTestRunner(ThreadArgs *targs) {
-    int rc = AsyncWriteIoTest(targs->api, targs->file.c_str(),
+    int rc = AsyncWriteIoTest(dynamic_cast<BdevCpp::AsyncApi *>(targs->api), targs->file.c_str(),
         targs->int_check, targs->l_cnt, targs->out_l_cnt, 
-        targs->max_ios_m, targs->min_ios_m, targs->m_q, targs->print_file_size, targs->stat_file, targs->unlink_file, &targs->stats);
+        targs->max_ios_m, targs->min_ios_m, targs->m_q, targs->print_file_size, targs->stat_file, targs->unlink_file, targs->poll_block_mode, targs->avg_lat, &targs->stats);
     targs->rc = rc;
 }
 
 static void AsyncWriteFdIoTestRunner(ThreadArgs *targs) {
-    int rc = AsyncWriteFdIoTest(targs->api, targs->fd,
+    int rc = AsyncWriteFdIoTest(dynamic_cast<BdevCpp::AsyncApi *>(targs->api), targs->fd,
         targs->l_cnt, targs->out_l_cnt, 
-        targs->max_ios_m, targs->min_ios_m, targs->m_q, &targs->stats);
+        targs->max_ios_m, targs->min_ios_m, targs->m_q, targs->poll_block_mode, targs->avg_lat, &targs->stats);
     targs->rc = rc;
 }
 
 static void AsyncSyncWriteIoTestRunner(ThreadArgs *targs) {
-    int rc = AsyncSyncWriteIoTest(targs->api, targs->file.c_str(),
+    int rc = AsyncSyncWriteIoTest(dynamic_cast<BdevCpp::AsyncApi *>(targs->api), targs->file.c_str(),
         targs->int_check, targs->l_cnt, targs->out_l_cnt,
-        targs->max_ios_m, targs->min_ios_m, targs->m_q, targs->print_file_size, targs->stat_file, targs->unlink_file, &targs->stats);
+        targs->max_ios_m, targs->min_ios_m, targs->m_q, targs->print_file_size, targs->stat_file, targs->unlink_file, targs->poll_block_mode, targs->avg_lat, &targs->stats);
     targs->rc = rc;
 }
 
 static void AsyncReadIoTestRunner(ThreadArgs *targs) {
-    int rc = AsyncReadIoTest(targs->api, targs->file.c_str(),
+    int rc = AsyncReadIoTest(dynamic_cast<BdevCpp::AsyncApi *>(targs->api), targs->file.c_str(),
         targs->int_check, targs->l_cnt, targs->out_l_cnt,
-        targs->max_ios_m, targs->min_ios_m, targs->m_q, targs->print_file_size, targs->stat_file, targs->unlink_file, &targs->stats);
+        targs->max_ios_m, targs->min_ios_m, targs->m_q, targs->print_file_size, targs->stat_file, targs->unlink_file, targs->poll_block_mode, targs->avg_lat, &targs->stats);
     targs->rc = rc;
 }
 
 static void AsyncReadFdIoTestRunner(ThreadArgs *targs) {
-    int rc = AsyncReadFdIoTest(targs->api, targs->fd,
+    int rc = AsyncReadFdIoTest(dynamic_cast<BdevCpp::AsyncApi *>(targs->api), targs->fd,
         targs->l_cnt, targs->out_l_cnt,
-        targs->max_ios_m, targs->min_ios_m, targs->m_q, &targs->stats);
+        targs->max_ios_m, targs->min_ios_m, targs->m_q, targs->poll_block_mode, targs->avg_lat, &targs->stats);
     targs->rc = rc;
 }
 
 static void AsyncSyncReadIoTestRunner(ThreadArgs *targs) {
-    int rc = AsyncSyncReadIoTest(targs->api, targs->file.c_str(),
+    int rc = AsyncSyncReadIoTest(dynamic_cast<BdevCpp::AsyncApi *>(targs->api), targs->file.c_str(),
         targs->int_check, targs->l_cnt, targs->out_l_cnt,
-        targs->max_ios_m, targs->min_ios_m, targs->m_q, targs->print_file_size, targs->stat_file, targs->unlink_file, &targs->stats);
+        targs->max_ios_m, targs->min_ios_m, targs->m_q, targs->print_file_size, targs->stat_file, targs->unlink_file, targs->poll_block_mode, targs->avg_lat, &targs->stats);
     targs->rc = rc;
 }
 
@@ -1700,6 +1929,8 @@ int main(int argc, char **argv) {
     bool async_test = false;
     bool async_sync_test = false;
     bool async_fd_test = false;
+    int poll_block_mode = 1; // poll
+    bool avg_lat = false;
     eTestType test_type = eWriteTest;
 
     int ret = mainGetopt(argc, argv,
@@ -1723,6 +1954,8 @@ int main(int argc, char **argv) {
             print_file_size,
             stat_file,
             unlink_file,
+            poll_block_mode,
+            avg_lat,
             test_type,
             debug);
     if (ret) {
@@ -1799,6 +2032,7 @@ int main(int argc, char **argv) {
                 print_file_size,
                 stat_file,
                 unlink_file,
+                avg_lat,
                 &iostats);
             if (rc)
                 cerr << "SyncWriteIoTest failed rc: " << rc << endl;
@@ -1810,24 +2044,56 @@ int main(int argc, char **argv) {
         }
 
         if (psync_test == true) {
-            IoStats iostats;
-            memset(&iostats, '\0', sizeof(iostats));
-            rc = SyncPwriteIoTest(syncApi, sync_file.c_str(),
-                integrity_check,
-                loop_count, out_loop_count,
-                max_iosize_mult,
-                min_iosize_mult,
-                print_file_size,
-                stat_file,
-                unlink_file,
-                &iostats);
-            if (rc)
-                cerr << "SyncPwriteIoTest failed rc: " << rc << endl;
-            else
-                cout << "bytes_written: " << iostats.bytes_written << " bytes_read: " << iostats.bytes_read <<
-                    " write_ios: " << iostats.write_ios << " read_ios: " << iostats.read_ios <<
-                    " write MiB/sec: " << static_cast<float>(iostats.write_mbsec) << " read MiB/sec: " << static_cast<float>(iostats.read_mbsec) <<
-                    " write IOPS: " << static_cast<float>(iostats.write_iops) << " read IOPS: " << static_cast<float>(iostats.read_iops) << endl;
+            if (num_files == 1) {
+                IoStats iostats;
+                memset(&iostats, '\0', sizeof(iostats));
+                rc = SyncPwriteIoTest(syncApi, sync_file.c_str(),
+                    legacy_newstack_mode, integrity_check,
+                    loop_count, out_loop_count,
+                    max_iosize_mult,
+                    min_iosize_mult,
+                    print_file_size,
+                    stat_file,
+                    unlink_file,
+                    avg_lat,
+                    &iostats);
+                if (rc)
+                    cerr << "SyncPwriteIoTest failed rc: " << rc << endl;
+                else
+                    cout << "bytes_written: " << iostats.bytes_written << " bytes_read: " << iostats.bytes_read <<
+                        " write_ios: " << iostats.write_ios << " read_ios: " << iostats.read_ios <<
+                        " write MiB/sec: " << static_cast<float>(iostats.write_mbsec) << " read MiB/sec: " << static_cast<float>(iostats.read_mbsec) <<
+                        " write IOPS: " << static_cast<float>(iostats.write_iops) << " read IOPS: " << static_cast<float>(iostats.read_iops) << endl;
+            } else {
+                IoStats iostats;
+                memset(&iostats, '\0', sizeof(iostats));
+                thread *threads[64];
+                ThreadArgs *thread_args[64];
+                for (size_t i = 0 ; i < num_files ; i++) {
+                    string sync_f = sync_file + to_string(i);
+                    thread_args[i] = new ThreadArgs{syncApi, sync_f, legacy_newstack_mode, -1, integrity_check,
+                        loop_count, out_loop_count,
+                        max_iosize_mult, min_iosize_mult, max_queued, print_file_size, stat_file, unlink_file, poll_block_mode, avg_lat};
+                    threads[i] = new thread(&SyncPwriteIoTestRunner, thread_args[i]);
+                }
+
+                for (size_t i = 0 ; i < num_files ; i++) {
+                    threads[i]->join();
+                    iostats.write_mbsec += thread_args[i]->stats.write_mbsec;
+                    iostats.read_mbsec += thread_args[i]->stats.read_mbsec;
+                    iostats.write_iops += thread_args[i]->stats.write_iops;
+                    iostats.read_iops += thread_args[i]->stats.read_iops;
+                    iostats.bytes_written += thread_args[i]->stats.bytes_written;
+                    iostats.bytes_read += thread_args[i]->stats.bytes_read;
+                    iostats.write_ios += thread_args[i]->stats.write_ios;
+                    iostats.read_ios += thread_args[i]->stats.read_ios;
+                }
+                if (!rc)
+                    cout << "bytes_written: " << iostats.bytes_written << " bytes_read: " << iostats.bytes_read <<
+                        " write_ios: " << iostats.write_ios << " read_ios: " << iostats.read_ios <<
+                        " write MiB/sec: " << static_cast<float>(iostats.write_mbsec) << " read MiB/sec: " << static_cast<float>(iostats.read_mbsec) <<
+                        " write IOPS: " << static_cast<float>(iostats.write_iops) << " read IOPS: " << static_cast<float>(iostats.read_iops) << endl;
+            }
         }
 
         if (async_test == true) {
@@ -1836,7 +2102,7 @@ int main(int argc, char **argv) {
                 memset(&iostats, '\0', sizeof(iostats));
                 rc = AsyncWriteIoTest(asyncApi, async_file.c_str(),
                     integrity_check, loop_count, out_loop_count,
-                    max_iosize_mult, min_iosize_mult, max_queued, print_file_size, stat_file, unlink_file, &iostats);
+                    max_iosize_mult, min_iosize_mult, max_queued, print_file_size, stat_file, unlink_file, poll_block_mode, avg_lat, &iostats);
                 if (rc)
                     cerr << "AsyncWriteIoTest failed rc: " << rc << endl;
                 else
@@ -1852,9 +2118,9 @@ int main(int argc, char **argv) {
                 ThreadArgs *thread_args[64];
                 for (size_t i = 0 ; i < num_files ; i++) {
                     string async_f = async_file + to_string(i);
-                    thread_args[i] = new ThreadArgs{asyncApi, async_f, -1, integrity_check,
+                    thread_args[i] = new ThreadArgs{asyncApi, async_f, -1, -1, integrity_check,
                         loop_count, out_loop_count,
-                        max_iosize_mult, min_iosize_mult, max_queued, print_file_size, stat_file, unlink_file};
+                        max_iosize_mult, min_iosize_mult, max_queued, print_file_size, stat_file, unlink_file, poll_block_mode, avg_lat};
                     threads[i] = new thread(&AsyncWriteIoTestRunner, thread_args[i]);
                 }
 
@@ -1883,7 +2149,7 @@ int main(int argc, char **argv) {
                 memset(&iostats, '\0', sizeof(iostats));
                 rc = AsyncSyncWriteIoTest(asyncApi, async_file.c_str(),
                     integrity_check, loop_count, out_loop_count,
-                    max_iosize_mult, min_iosize_mult, max_queued, print_file_size, stat_file, unlink_file, &iostats);
+                    max_iosize_mult, min_iosize_mult, max_queued, print_file_size, stat_file, unlink_file, poll_block_mode, avg_lat, &iostats);
                 if (rc)
                     cerr << "AsyncSyncWriteIoTest failed rc: " << rc << endl;
                 else
@@ -1899,9 +2165,9 @@ int main(int argc, char **argv) {
                 ThreadArgs *thread_args[64];
                 for (size_t i = 0 ; i < num_files ; i++) {
                     string async_f = async_file + to_string(i);
-                    thread_args[i] = new ThreadArgs{asyncApi, async_f, -1, integrity_check,
+                    thread_args[i] = new ThreadArgs{asyncApi, async_f, -1, -1, integrity_check,
                         loop_count, out_loop_count,
-                        max_iosize_mult, min_iosize_mult, max_queued, print_file_size, stat_file, unlink_file};
+                        max_iosize_mult, min_iosize_mult, max_queued, print_file_size, stat_file, poll_block_mode, unlink_file, avg_lat};
                     threads[i] = new thread(&AsyncSyncWriteIoTestRunner, thread_args[i]);
                 }
 
@@ -1938,7 +2204,7 @@ int main(int argc, char **argv) {
 
                 rc = AsyncWriteFdIoTest(asyncApi, fd,
                     loop_count, out_loop_count,
-                    max_iosize_mult, min_iosize_mult, max_queued, &iostats);
+                    max_iosize_mult, min_iosize_mult, max_queued, poll_block_mode, avg_lat, &iostats);
                 if (rc)
                     cerr << "AsyncWriteFdIoTest failed rc: " << rc << endl;
                 else
@@ -1954,9 +2220,9 @@ int main(int argc, char **argv) {
                 ThreadArgs *thread_args[64];
                 for (size_t i = 0 ; i < num_files ; i++) {
                     string async_f = async_file + to_string(i);
-                    thread_args[i] = new ThreadArgs{asyncApi, async_f, fd, integrity_check,
+                    thread_args[i] = new ThreadArgs{asyncApi, async_f, -1, fd, integrity_check,
                         loop_count, out_loop_count,
-                        max_iosize_mult, min_iosize_mult, max_queued, print_file_size, stat_file, unlink_file};
+                        max_iosize_mult, min_iosize_mult, max_queued, print_file_size, stat_file, poll_block_mode, unlink_file, avg_lat};
                     threads[i] = new thread(&AsyncWriteFdIoTestRunner, thread_args[i]);
                 }
 
@@ -1992,6 +2258,7 @@ int main(int argc, char **argv) {
             print_file_size,
             stat_file,
             unlink_file,
+            avg_lat,
             &iostats);
         if (rc)
             cerr << "SyncReadIoTest failed rc: " << rc << endl;
@@ -2006,13 +2273,14 @@ int main(int argc, char **argv) {
         IoStats iostats;
         memset(&iostats, '\0', sizeof(iostats));
         rc = SyncPreadIoTest(syncApi, sync_file.c_str(),
-            integrity_check,
+            legacy_newstack_mode, integrity_check,
             loop_count, out_loop_count,
             max_iosize_mult,
             min_iosize_mult,
             print_file_size,
             stat_file,
             unlink_file,
+            avg_lat,
             &iostats);
         if (rc)
             cerr << "SyncPreadIoTest failed rc: " << rc << endl;
@@ -2029,7 +2297,7 @@ int main(int argc, char **argv) {
                 memset(&iostats, '\0', sizeof(iostats));
                 rc = AsyncReadIoTest(asyncApi, async_file.c_str(),
                     integrity_check, loop_count, out_loop_count,
-                    max_iosize_mult, min_iosize_mult, max_queued, print_file_size, stat_file, unlink_file, &iostats);
+                    max_iosize_mult, min_iosize_mult, max_queued, print_file_size, stat_file, unlink_file, poll_block_mode, avg_lat, &iostats);
                 if (rc)
                     cerr << "AsyncReadIoTest failed rc: " << rc << endl;
                 else
@@ -2045,9 +2313,9 @@ int main(int argc, char **argv) {
                 ThreadArgs *thread_args[64];
                 for (size_t i = 0 ; i < num_files ; i++) {
                     string async_f = async_file + to_string(i);
-                    thread_args[i] = new ThreadArgs{asyncApi, async_f, -1, integrity_check,
+                    thread_args[i] = new ThreadArgs{asyncApi, async_f, -1, -1, integrity_check,
                         loop_count, out_loop_count,
-                        max_iosize_mult, min_iosize_mult, max_queued, print_file_size, stat_file, unlink_file};
+                        max_iosize_mult, min_iosize_mult, max_queued, print_file_size, stat_file, unlink_file, poll_block_mode, avg_lat};
                     threads[i] = new thread(&AsyncReadIoTestRunner, thread_args[i]);
                 }
 
@@ -2076,7 +2344,7 @@ int main(int argc, char **argv) {
                 memset(&iostats, '\0', sizeof(iostats));
                 rc = AsyncSyncReadIoTest(asyncApi, async_file.c_str(),
                     integrity_check, loop_count, out_loop_count,
-                    max_iosize_mult, min_iosize_mult, max_queued, print_file_size, stat_file, unlink_file, &iostats);
+                    max_iosize_mult, min_iosize_mult, max_queued, print_file_size, stat_file, unlink_file, poll_block_mode, avg_lat, &iostats);
                 if (rc)
                     cerr << "AsyncSyncReadIoTest failed rc: " << rc << endl;
                 else
@@ -2092,9 +2360,9 @@ int main(int argc, char **argv) {
                 ThreadArgs *thread_args[64];
                 for (size_t i = 0 ; i < num_files ; i++) {
                     string async_f = async_file + to_string(i);
-                    thread_args[i] = new ThreadArgs{asyncApi, async_f, -1, integrity_check,
+                    thread_args[i] = new ThreadArgs{asyncApi, async_f, -1, -1, integrity_check,
                         loop_count, out_loop_count,
-                        max_iosize_mult, min_iosize_mult, max_queued, print_file_size, stat_file, unlink_file};
+                        max_iosize_mult, min_iosize_mult, max_queued, print_file_size, stat_file, unlink_file, poll_block_mode, avg_lat};
                     threads[i] = new thread(&AsyncSyncReadIoTestRunner, thread_args[i]);
                 }
 
@@ -2130,7 +2398,7 @@ int main(int argc, char **argv) {
                 memset(&iostats, '\0', sizeof(iostats));
                 rc = AsyncReadFdIoTest(asyncApi, fd,
                     loop_count, out_loop_count,
-                    max_iosize_mult, min_iosize_mult, max_queued, &iostats);
+                    max_iosize_mult, min_iosize_mult, max_queued, poll_block_mode, avg_lat, &iostats);
                 if (rc)
                     cerr << "AsyncReadFdIoTest failed rc: " << rc << endl;
                 else
@@ -2146,9 +2414,9 @@ int main(int argc, char **argv) {
                 ThreadArgs *thread_args[64];
                 for (size_t i = 0 ; i < num_files ; i++) {
                     string async_f = async_file + to_string(i);
-                    thread_args[i] = new ThreadArgs{asyncApi, async_f, fd, integrity_check,
+                    thread_args[i] = new ThreadArgs{asyncApi, async_f, -1, fd, integrity_check,
                         loop_count, out_loop_count,
-                        max_iosize_mult, min_iosize_mult, max_queued, print_file_size, stat_file, unlink_file};
+                        max_iosize_mult, min_iosize_mult, max_queued, print_file_size, stat_file, unlink_file, poll_block_mode, avg_lat};
                     threads[i] = new thread(&AsyncReadFdIoTestRunner, thread_args[i]);
                 }
 

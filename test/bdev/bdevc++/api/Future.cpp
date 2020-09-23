@@ -72,7 +72,7 @@ ReadFuture::~ReadFuture() {}
 int ReadFuture::get(char *&data, size_t &_dataSize, unsigned long long _timeout) {
     unique_lock<mutex> lk(mtx);
     const chrono::milliseconds timeout(_timeout);
-    if (cv.wait_for(lk, timeout, [this] { return !opStatus; }) == false) {
+    if (cv.wait_for(lk, timeout, [this] { return ready; }) == false) {
         opStatus = -1;
         lk.unlock();
         return opStatus;
